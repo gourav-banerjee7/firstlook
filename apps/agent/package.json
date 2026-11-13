@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@firstlook/shared": "workspace:*"
+    "@firstlook/shared": "workspace:*",
+    "fastify": "^5.12.8"
   }
 }

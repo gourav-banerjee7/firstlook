@@ -1,0 +1,16 @@
+{
+  "name": "@firstlook/payments-stub",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@firstlook/telemetry": "workspace:*",
+    "fastify": "^5.12.8"
+  }
+}

@@ -1,0 +1,132 @@
+# The whole Firstlook demo on one machine: docker compose up --build
+# Grafana http://localhost:3000 · Prometheus http://localhost:9095 · demo-api http://localhost:8081 · agent http://localhost:8080
+
+x-app: &app
+  build:
+    context: .
+  restart: unless-stopped
+  environment: &app-env
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: firstlook
+      POSTGRES_PASSWORD: firstlook
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U firstlook"]
+      interval: 3s
+      retries: 20
+    ports: ["5432:5432"]
+
+  # ---- the demo system ------------------------------------------------------------------------
+
+  demo-api:
+    <<: *app
+    build: { context: ., args: { APP: demo-api } }
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgres://firstlook:firstlook@postgres:5432/demo
+      PAYMENTS_URL: http://payments-stub:8082
+    # A real limit, so the memory-leak scenario ends in OOM kills and restarts.
+    mem_limit: 220m
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8081:8081"]
+
+  payments-stub:
+    <<: *app
+    build: { context: ., args: { APP: payments-stub } }
+    ports: ["8082:8082"]
+
+  loadgen:
+    <<: *app
+    build: { context: ., args: { APP: loadgen } }
+    environment:
+      TARGET_URL: http://demo-api:8081
+      RPS: ${LOADGEN_RPS:-12}
+    depends_on: [demo-api]
+
+  # ---- Firstlook ------------------------------------------------------------------------------
+
+  agent:
+    <<: *app
+    build: { context: ., args: { APP: agent } }
+    environment:
+      <<: *app-env
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-dev-webhook-token}
+    ports: ["8080:8080"]
+
+  # ---- telemetry --------------------------------------------------------------------------------
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on: [loki, tempo]
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9095:9090"]
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./infra/loki/loki.yaml:/etc/loki/config.yaml:ro
+    ports: ["3100:3100"]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ./infra/tempo/tempo.yaml:/etc/tempo/config.yaml:ro
+    ports: ["3200:3200"]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Viewers can open evidence links without logging in.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 3s
+      retries: 40
+    ports: ["3000:3000"]
+
+  # Applies infra/terraform/grafana once Grafana is up: dashboards and alerts as code.
+  grafana-config:
+    image: hashicorp/terraform:1.10
+    working_dir: /tf
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - terraform init -input=false -no-color && terraform apply -auto-approve -input=false -no-color
+    environment:
+      TF_VAR_grafana_url: http://grafana:3000
+      TF_VAR_grafana_auth: admin:${GRAFANA_ADMIN_PASSWORD:-admin}
+      TF_VAR_agent_webhook_token: ${WEBHOOK_TOKEN:-dev-webhook-token}
+    volumes:
+      - ./infra/terraform/grafana:/tf
+    depends_on:
+      grafana: { condition: service_healthy }
+    restart: "no"
+
+volumes:
+  postgres-data:
+  grafana-data:
