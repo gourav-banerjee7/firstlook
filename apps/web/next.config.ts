@@ -1,7 +1,11 @@
+import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
   transpilePackages: ["@firstlook/shared"],
+  // Self-contained server for the container image; the monorepo root is the tracing root.
+  output: "standalone",
+  outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,
   async headers() {
     return [

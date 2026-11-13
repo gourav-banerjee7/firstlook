@@ -1,0 +1,73 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+data:
+  init.sql: |
+    -- The firstlook database is created from POSTGRES_USER; the demo system gets its own.
+    CREATE DATABASE demo;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+    {{- include "firstlook.selector" "postgres" | nindent 4 }}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: {{- include "firstlook.selector" "postgres" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "firstlook.labels" . | nindent 8 }}
+        {{- include "firstlook.selector" "postgres" | nindent 8 }}
+    spec:
+      {{- include "firstlook.podSecurity" (dict "uid" 70) | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.image }}
+          {{- include "firstlook.containerSecurity" . | nindent 10 }}
+          ports: [{ name: pg, containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_USER, value: firstlook }
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "POSTGRES_PASSWORD" "key" "postgres-password") | nindent 12 }}
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+          readinessProbe:
+            exec: { command: [pg_isready, -U, firstlook] }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.postgresql.resources | nindent 12 }}
+      volumes:
+        - { name: run, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        - { name: init, configMap: { name: postgres-init } }
+        {{- if not .Values.postgresql.persistence.size }}
+        - { name: data, emptyDir: {} }
+        {{- end }}
+  {{- with .Values.postgresql.persistence.size }}
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $.Values.postgresql.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: { requests: { storage: {{ . }} } }
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "firstlook.selector" "postgres" | nindent 4 }}
+  ports: [{ name: pg, port: 5432, targetPort: pg }]
+{{- end }}

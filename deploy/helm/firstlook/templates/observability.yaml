@@ -1,0 +1,79 @@
+{{- if .Values.observability.bundled }}
+{{- /* Single-node telemetry stack for dev, demos and CI. Same configs as docker compose. */}}
+{{- $o := .Values.observability }}
+{{- $components := list
+  (dict "name" "otel-collector" "image" $o.images.collector "uid" 10001 "args" (list "--config=/etc/otelcol/config.yaml") "config" "collector.yaml" "mount" "/etc/otelcol/config.yaml" "ports" (list (dict "name" "otlp-http" "port" 4318) (dict "name" "otlp-grpc" "port" 4317) (dict "name" "metrics" "port" 8889)) "data" "" "probe" "")
+  (dict "name" "prometheus" "image" $o.images.prometheus "uid" 65534 "args" (list "--config.file=/etc/prometheus/prometheus.yml" "--storage.tsdb.path=/prometheus" "--storage.tsdb.retention.time=2d") "config" "prometheus.yml" "mount" "/etc/prometheus/prometheus.yml" "ports" (list (dict "name" "http" "port" 9090)) "data" "/prometheus" "probe" "/-/ready")
+  (dict "name" "loki" "image" $o.images.loki "uid" 10001 "args" (list "-config.file=/etc/loki/config.yaml") "config" "loki.yaml" "mount" "/etc/loki/config.yaml" "ports" (list (dict "name" "http" "port" 3100)) "data" "/loki" "probe" "/ready")
+  (dict "name" "tempo" "image" $o.images.tempo "uid" 10001 "args" (list "-config.file=/etc/tempo/config.yaml") "config" "tempo.yaml" "mount" "/etc/tempo/config.yaml" "ports" (list (dict "name" "http" "port" 3200) (dict "name" "otlp-grpc" "port" 4317)) "data" "/var/tempo" "probe" "/ready") }}
+{{- range $components }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}-config
+  labels: {{- include "firstlook.labels" $ | nindent 4 }}
+data:
+  {{ .config }}: |
+    {{- $.Files.Get (printf "files/%s" .config) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  labels: {{- include "firstlook.labels" $ | nindent 4 }}
+    {{- include "firstlook.selector" .name | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "firstlook.selector" .name | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "firstlook.labels" $ | nindent 8 }}
+        {{- include "firstlook.selector" .name | nindent 8 }}
+      annotations:
+        checksum/config: {{ $.Files.Get (printf "files/%s" .config) | sha256sum }}
+    spec:
+      {{- include "firstlook.podSecurity" (dict "uid" .uid) | nindent 6 }}
+      containers:
+        - name: {{ .name }}
+          image: {{ .image }}
+          args: {{- toYaml .args | nindent 12 }}
+          {{- include "firstlook.containerSecurity" $ | nindent 10 }}
+          ports:
+            {{- range .ports }}
+            - { name: {{ .name }}, containerPort: {{ .port }} }
+            {{- end }}
+          volumeMounts:
+            - { name: config, mountPath: {{ .mount }}, subPath: {{ .config }}, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+            {{- if .data }}
+            - { name: data, mountPath: {{ .data }} }
+            {{- end }}
+          {{- if .probe }}
+          readinessProbe:
+            httpGet: { path: {{ .probe }}, port: http }
+            periodSeconds: 10
+          {{- end }}
+          resources: {{- toYaml $o.resources | nindent 12 }}
+      volumes:
+        - { name: config, configMap: { name: {{ .name }}-config } }
+        - { name: tmp, emptyDir: {} }
+        {{- if .data }}
+        - { name: data, emptyDir: {} }
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels: {{- include "firstlook.labels" $ | nindent 4 }}
+spec:
+  selector: {{- include "firstlook.selector" .name | nindent 4 }}
+  ports:
+    {{- range .ports }}
+    - { name: {{ .name }}, port: {{ .port }}, targetPort: {{ .name }} }
+    {{- end }}
+{{- end }}
+{{- end }}

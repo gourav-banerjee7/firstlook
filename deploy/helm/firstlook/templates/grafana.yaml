@@ -1,0 +1,166 @@
+{{- if .Values.observability.bundled }}
+{{- $a := .Values.alerts }}
+{{- $svc := "demo-api" }}
+{{- $rb := "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks" }}
+{{- /* The same three rules as infra/terraform/grafana/alerts.tf, as Grafana file provisioning. */}}
+{{- $rules := list
+  (dict "uid" "firstlook-latency" "title" "High P99 latency" "for" "30s" "severity" "critical" "threshold" $a.latencyP99Seconds
+        "expr" (printf "histogram_quantile(0.99, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=\"%s\"}[1m])))" $svc)
+        "summary" (printf "P99 latency on %s is above %v ms." $svc (mulf $a.latencyP99Seconds 1000)) "runbook" "high-latency.md")
+  (dict "uid" "firstlook-errors" "title" "High 5xx error rate" "for" "20s" "severity" "critical" "threshold" $a.errorRateRatio
+        "expr" (printf "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=\"%s\",http_response_status_code=~\"5..\"}[1m])) / sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=\"%s\"}[1m]))" $svc $svc)
+        "summary" (printf "More than %v%% of requests to %s are failing." (mulf $a.errorRateRatio 100) $svc) "runbook" "error-rate.md")
+  (dict "uid" "firstlook-memory" "title" "Memory near limit" "for" "15s" "severity" "warning" "threshold" $a.memoryBytes
+        "expr" (printf "max by (service_name) (process_memory_usage_bytes{service_name=\"%s\"})" $svc)
+        "summary" (printf "%s memory is above %v MB and climbing toward its limit." $svc (div (int64 $a.memoryBytes) 1000000)) "runbook" "memory.md") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - { name: Prometheus, uid: prometheus, type: prometheus, url: "http://prometheus:9090", isDefault: true, jsonData: { httpMethod: POST, timeInterval: 5s } }
+      - name: Loki
+        uid: loki
+        type: loki
+        url: http://loki:3100
+        jsonData:
+          derivedFields: [{ name: TraceID, matcherType: label, matcherRegex: trace_id, datasourceUid: tempo, url: "$${__value.raw}" }]
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        url: http://tempo:3200
+        jsonData:
+          tracesToLogsV2: { datasourceUid: loki, spanStartTimeShift: -1m, spanEndTimeShift: 1m, filterByTraceID: true }
+          serviceMap: { datasourceUid: prometheus }
+      - name: Deploy log
+        uid: deploys
+        type: grafana-postgresql-datasource
+        url: postgres:5432
+        user: firstlook
+        jsonData: { database: demo, sslmode: disable, postgresVersion: 1600 }
+        secureJsonData: { password: "$FIRSTLOOK_PG_PASSWORD" }
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - { name: firstlook, folder: Firstlook demo, folderUid: firstlook, type: file, options: { path: /etc/grafana/dashboards } }
+  alerting.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: demo-api
+        folder: Firstlook demo
+        interval: 10s
+        rules:
+          {{- range $rules }}
+          - uid: {{ .uid }}
+            title: {{ .title | quote }}
+            condition: C
+            for: {{ .for }}
+            noDataState: OK
+            execErrState: OK
+            labels: { severity: {{ .severity }}, service: {{ $svc }}, team: bookings }
+            annotations:
+              summary: {{ .summary | quote }}
+              runbook_url: {{ printf "%s/%s" $rb .runbook | quote }}
+            data:
+              - refId: A
+                datasourceUid: prometheus
+                relativeTimeRange: { from: 300, to: 0 }
+                model: { refId: A, instant: true, expr: {{ .expr | quote }} }
+              - refId: C
+                datasourceUid: __expr__
+                relativeTimeRange: { from: 0, to: 0 }
+                model: { refId: C, type: threshold, expression: A, conditions: [{ evaluator: { type: gt, params: [{{ .threshold }}] } }] }
+          {{- end }}
+    contactPoints:
+      - orgId: 1
+        name: Firstlook
+        receivers:
+          - uid: firstlook-webhook
+            type: webhook
+            settings:
+              url: http://agent:8080/webhooks/grafana
+              httpMethod: POST
+              authorization_scheme: Bearer
+              authorization_credentials: "$FIRSTLOOK_WEBHOOK_TOKEN"
+    policies:
+      - orgId: 1
+        receiver: Firstlook
+        group_by: [alertname, service]
+        group_wait: 5s
+        group_interval: 30s
+        repeat_interval: 1h
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+data:
+  demo-api.json: |
+    {{- .Files.Get "files/dashboards/demo-api.json" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+    {{- include "firstlook.selector" "grafana" | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "firstlook.selector" "grafana" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "firstlook.labels" . | nindent 8 }}
+        {{- include "firstlook.selector" "grafana" | nindent 8 }}
+      annotations:
+        checksum/provisioning: {{ printf "%v%v" $rules .Values.alerts | sha256sum }}
+    spec:
+      {{- include "firstlook.podSecurity" (dict "uid" 472) | nindent 6 }}
+      containers:
+        - name: grafana
+          image: {{ .Values.observability.images.grafana }}
+          {{- include "firstlook.containerSecurity" . | nindent 10 }}
+          ports: [{ name: http, containerPort: 3000 }]
+          env:
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "GF_SECURITY_ADMIN_PASSWORD" "key" "grafana-admin-password") | nindent 12 }}
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "FIRSTLOOK_WEBHOOK_TOKEN" "key" "webhook-token") | nindent 12 }}
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "FIRSTLOOK_PG_PASSWORD" "key" "postgres-password") | nindent 12 }}
+            - { name: GF_AUTH_ANONYMOUS_ENABLED, value: "true" }
+            - { name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Viewer }
+            # Lets anonymous viewers open Explore, so evidence links work; they still cannot save anything.
+            - { name: GF_USERS_VIEWERS_CAN_EDIT, value: "true" }
+            - { name: GF_ANALYTICS_REPORTING_ENABLED, value: "false" }
+            - { name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false" }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/grafana }
+            - { name: tmp, mountPath: /tmp }
+            - { name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasources.yaml, subPath: datasources.yaml }
+            - { name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml }
+            - { name: provisioning, mountPath: /etc/grafana/provisioning/alerting/alerting.yaml, subPath: alerting.yaml }
+            - { name: dashboards, mountPath: /etc/grafana/dashboards }
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.observability.resources | nindent 12 }}
+      volumes:
+        - { name: data, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        - { name: provisioning, configMap: { name: grafana-provisioning } }
+        - { name: dashboards, configMap: { name: grafana-dashboards } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "firstlook.selector" "grafana" | nindent 4 }}
+  ports: [{ name: http, port: 3000, targetPort: http }]
+{{- end }}

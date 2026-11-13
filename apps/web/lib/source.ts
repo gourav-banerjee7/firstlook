@@ -122,5 +122,7 @@ export function recordedSource(data: RecordedData = RECORDED): Source {
 
 export function createSource(): Source {
   const base = process.env.NEXT_PUBLIC_AGENT_URL;
+  // "same-origin": served next to a proxy to the agent (the Helm chart).
+  if (base === "same-origin") return liveSource("");
   return base ? liveSource(base) : recordedSource();
 }

@@ -1,0 +1,11 @@
+apiVersion: v2
+name: firstlook
+description: >-
+  An AI first responder for on-call: receives Grafana alerts, investigates with read-only queries against
+  Prometheus, Loki and Tempo, and writes a triage note where every claim links to its evidence.
+type: application
+version: 0.5.0
+appVersion: "0.5.0"
+home: https://github.com/gourav-banerjee7/firstlook
+sources: [https://github.com/gourav-banerjee7/firstlook]
+keywords: [observability, incident-response, ai-agent, grafana, sre]
