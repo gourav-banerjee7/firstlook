@@ -29,7 +29,13 @@ const data: RecordedData = {
     {
       scenario: "bad-deploy",
       incident,
-      steps: [step(1, 0, "update"), step(2, 45_000, "update"), step(3, 45_100, "tool"), step(4, 45_200, "note"), step(5, 240_000, "update")],
+      steps: [
+        step(1, 0, "update"),
+        step(2, 45_000, "update"),
+        step(3, 45_100, "tool"),
+        step(4, 45_200, "note"),
+        step(5, 240_000, "update"),
+      ],
     },
   ],
 };
@@ -60,7 +66,10 @@ describe("recorded replay", () => {
   it("stops cleanly", () => {
     vi.useFakeTimers();
     const steps: string[] = [];
-    const stop = recordedSource(data).watch("inc_1", { onStep: (s) => steps.push(s.title), onIncident: () => undefined });
+    const stop = recordedSource(data).watch("inc_1", {
+      onStep: (s) => steps.push(s.title),
+      onIncident: () => undefined,
+    });
     vi.advanceTimersByTime(400);
     stop();
     vi.advanceTimersByTime(60_000);

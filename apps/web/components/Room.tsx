@@ -101,15 +101,15 @@ export function Room() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 pb-16 sm:px-6">
-      <header className="flex flex-wrap items-center gap-3 py-5">
+      <header className="flex items-center gap-3 py-5">
         <Logo />
-        <div>
+        <div className="min-w-0">
           <h1 className="text-[15px] leading-tight font-semibold">Firstlook</h1>
-          <p className="text-xs text-muted">The first responder that shows its work</p>
+          <p className="truncate text-xs text-muted">The first responder that shows its work</p>
         </div>
         <span
           className={cx(
-            "ml-auto rounded-full border px-2.5 py-1 text-[11px]",
+            "ml-auto shrink-0 rounded-full border px-2.5 py-1 text-[11px]",
             live ? "border-ok/40 text-ok" : "border-line-strong text-muted",
           )}
           title={
@@ -120,7 +120,7 @@ export function Room() {
         >
           {live ? "● Live" : "Recorded demo"}
         </span>
-        <a href={REPO} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-ink">
+        <a href={REPO} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-muted hover:text-ink">
           GitHub ↗
         </a>
       </header>
@@ -198,8 +198,8 @@ export function Room() {
               </div>
             </>
           ) : (
-            <div className="grid min-h-[50vh] place-items-center rounded-xl border border-dashed border-line text-sm text-muted">
-              {live ? "No incidents yet. Break something on the left." : "Pick a recording to replay."}
+            <div className="grid min-h-[30vh] place-items-center p-6 text-center lg:min-h-[50vh] rounded-xl border border-dashed border-line text-sm text-muted">
+              {live ? "No incidents yet. Break something to start one." : "Pick a recording to replay."}
             </div>
           )}
         </main>
