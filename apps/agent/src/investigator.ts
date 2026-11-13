@@ -30,6 +30,8 @@ export interface InvestigateOptions {
   budgets: Budgets;
   emit: (step: StepDraft) => Promise<void>;
   trace?: TraceHandle;
+  /** The investigation's notion of "now" for tool queries; replays pin it to the recorded time. */
+  now?: () => Date;
 }
 
 export interface InvestigationResult {
@@ -173,7 +175,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     let url: string | undefined;
     let query: string | undefined;
     try {
-      const out = await tool.run({ ...opts.ctx, now: new Date() }, args.data);
+      const out = await tool.run({ ...opts.ctx, now: (opts.now ?? (() => new Date()))() }, args.data);
       item.summary = out.summary;
       item.data = out.data;
       item.suspicious = containsInjection(out.data) || containsInjection(out.summary);
