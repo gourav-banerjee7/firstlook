@@ -61,7 +61,8 @@ export function conclude(input: PlannerInput) {
   const changes = find(history, "recent_changes");
   const deploy = ((changes?.data as Row[] | undefined) ?? []).find((d) => {
     const m = Number(d.minutes_before_onset);
-    return m >= 0 && m <= 30;
+    // A change only explains a problem that starts soon after it.
+    return m >= 0 && m <= 10;
   });
   const deps = find(history, "dependency_health");
   const badDep = ((deps?.data as Row[] | undefined) ?? []).find(
@@ -78,7 +79,7 @@ export function conclude(input: PlannerInput) {
   const ruled: string[] = [];
   const say = (h: HistoryItem | undefined, claim: string) => h && evidence.push({ claim, step: h.step });
 
-  if (changes && !deploy) ruled.push(`No deploy of ${alert.service} in the 30 minutes before onset.`);
+  if (changes && !deploy) ruled.push(`No deploy of ${alert.service} in the 10 minutes before onset.`);
   if (deps && !badDep && kind !== "memory") ruled.push("Downstream dependencies look healthy.");
 
   // ---- failing dependency -------------------------------------------------------------------
@@ -97,15 +98,21 @@ export function conclude(input: PlannerInput) {
     };
   }
 
-  // ---- short burst that recovered on its own --------------------------------------------------
-  if (kind === "errors" && ov.recovered === true && Number(ov.elevated_minutes) <= 3 && !deploy && !badDep) {
+  // ---- short burst that is recovering on its own --------------------------------------------------
+  if (
+    kind === "errors" &&
+    (ov.recovered === true || ov.falling === true) &&
+    Number(ov.elevated_minutes) <= 3 &&
+    !deploy &&
+    !badDep
+  ) {
     say(
       overview,
-      `5xx error rate peaked at ${ov.peak}, was elevated for ${ov.elevated_minutes} min and has recovered (now ${ov.now}).`,
+      `5xx error rate peaked at ${ov.peak}, was elevated for ${ov.elevated_minutes} min and ${ov.recovered ? "has recovered" : "is already falling"} (now ${ov.now}).`,
     );
     if (topLog) say(logs, `The errors were "${topLog.message}" (×${topLog.count_after_onset}).`);
     return {
-      summary: `A ${ov.elevated_minutes}-minute burst of errors on ${alert.service} that recovered by itself.`,
+      summary: `A ${ov.elevated_minutes}-minute burst of errors on ${alert.service} that is clearing up by itself.`,
       likely_cause: topLog
         ? `Transient "${topLog.message}" errors; nothing changed and no dependency is failing.`
         : "A transient blip; nothing changed.",

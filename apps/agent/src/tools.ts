@@ -64,15 +64,18 @@ export const hhmm = (d: Date | number) => new Date(d).toISOString().slice(11, 19
 
 export interface Shape {
   baseline: number;
+  /** Peak of the elevated run behind this alert. */
   peak: number;
   current: number;
-  /** When the series first left its baseline, if it did. */
+  /** When the elevated run behind this alert began, if there is one. */
   rose?: number;
-  /** Minutes spent above the elevated threshold. */
+  /** Length of that run, in minutes (to now if it's still going). */
   elevatedMinutes: number;
   /** Change per minute over the last ~3 minutes. */
   slopePerMin: number;
   recovered: boolean;
+  /** Still elevated but well down from the peak (under 60% of it). */
+  falling: boolean;
 }
 
 const median = (xs: number[]) => {
@@ -81,30 +84,55 @@ const median = (xs: number[]) => {
   return s[Math.floor(s.length / 2)]!;
 };
 
+/**
+ * Describe a series around an alert. The important part is finding the *run* of elevated points
+ * that the alert belongs to (the one nearest onset), so that an earlier, unrelated incident in the
+ * same window doesn't stretch the onset back or inflate how long this one has lasted.
+ */
 export function analyze(points: Array<[number, number]>, onset: Date, stepSeconds: number, unit: Unit): Shape {
   const onsetS = onset.getTime() / 1000;
-  const before = points.filter(([t]) => t < onsetS - 180).map(([, v]) => v);
   const vals = points.map(([, v]) => v);
-  const recent = points.filter(([t]) => t >= onsetS - 300).map(([, v]) => v);
+  const before = points.filter(([t]) => t < onsetS - 180).map(([, v]) => v);
   const baseline =
     before.length >= 3 ? median(before) : median(vals.slice(0, Math.max(1, Math.floor(vals.length / 4))));
   const elevated = (v: number) =>
     unit === "ratio" ? v > baseline + 0.02 : v > baseline * 1.5 + (unit === "bytes" ? 5e6 : 0);
-  const rosePoint = points.find(([t, v]) => t >= onsetS - 600 && elevated(v));
-  const tail = vals.slice(-4);
+
+  // The elevated point closest to onset (within 5 min before to 2 min after), then grow the run both ways.
+  let anchor = -1;
+  let best = Infinity;
+  points.forEach(([t, v], i) => {
+    const d = Math.abs(t - onsetS);
+    if (t >= onsetS - 300 && t <= onsetS + 120 && elevated(v) && d < best) {
+      best = d;
+      anchor = i;
+    }
+  });
+  let rs = anchor;
+  let re = anchor;
+  if (anchor >= 0) {
+    while (rs > 0 && elevated(points[rs - 1]![1])) rs--;
+    while (re < points.length - 1 && elevated(points[re + 1]![1])) re++;
+  }
+  const run = anchor >= 0 ? vals.slice(rs, re + 1) : [];
+
+  // "Now" is the last 30 s: responsive enough to see a blip clearing.
+  const tail = vals.slice(-2);
   const current = tail.length ? tail.reduce((a, b) => a + b, 0) / tail.length : NaN;
   const last = points.slice(-12);
   const slopePerMin =
     last.length >= 2 ? ((last.at(-1)![1] - last[0]![1]) / Math.max(1, last.at(-1)![0] - last[0]![0])) * 60 : 0;
+  const peak = run.length ? Math.max(...run) : vals.length ? Math.max(...vals) : NaN;
+  const recovered = anchor >= 0 && !elevated(current);
   return {
     baseline,
-    // Peak around this incident only, so an earlier incident in the window doesn't leak in.
-    peak: recent.length ? Math.max(...recent) : vals.length ? Math.max(...vals) : NaN,
+    peak,
     current,
-    rose: rosePoint?.[0],
-    elevatedMinutes: Math.round(((points.filter(([, v]) => elevated(v)).length * stepSeconds) / 60) * 10) / 10,
+    ...(anchor >= 0 ? { rose: points[rs]![0] } : {}),
+    elevatedMinutes: Math.round(((run.length * stepSeconds) / 60) * 10) / 10,
     slopePerMin,
-    recovered: rosePoint !== undefined && !elevated(current),
+    recovered,
+    falling: anchor >= 0 && !recovered && current < peak * 0.6,
   };
 }
 
@@ -184,7 +212,7 @@ const metricOverview = defineTool({
     parts[0] += ".";
     parts.push(
       s.rose !== undefined
-        ? `Left baseline at ${hhmm(s.rose * 1000)}; elevated for ${s.elevatedMinutes} min${s.recovered ? ", and has since recovered" : ", still elevated"}.`
+        ? `Left baseline at ${hhmm(s.rose * 1000)}; elevated for ${s.elevatedMinutes} min${s.recovered ? ", and has since recovered" : s.falling ? `, falling (now under 60% of the peak)` : ", still elevated"}.`
         : "No clear departure from baseline in this window.",
     );
     if (signal === "memory") {
@@ -202,6 +230,7 @@ const metricOverview = defineTool({
         rose_at: s.rose ? hhmm(s.rose * 1000) : null,
         elevated_minutes: s.elevatedMinutes,
         recovered: s.recovered,
+        falling: s.falling,
         ...(signal === "memory" ? { slope_per_min: fmt(s.slopePerMin, "bytes") } : {}),
       },
       query: q,

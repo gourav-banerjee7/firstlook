@@ -74,7 +74,7 @@ services:
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      INVESTIGATE_DELAY_MS: ${INVESTIGATE_DELAY_MS:-45000}
+      INVESTIGATE_DELAY_MS: ${INVESTIGATE_DELAY_MS:-60000}
       DEMO_API_URL: http://demo-api:8081
       BREAK_IT_COOLDOWN_SECONDS: ${BREAK_IT_COOLDOWN_SECONDS:-120}
       # Outputs: annotations on the Grafana dashboard; GitHub Issues only if you set a token and repo.

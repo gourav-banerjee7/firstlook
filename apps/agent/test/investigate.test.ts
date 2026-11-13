@@ -3,12 +3,17 @@ import { describe, expect, it } from "vitest";
 import { investigate, type StepDraft } from "../src/investigator.js";
 import { PlaybookPlanner } from "../src/planner/playbook.js";
 import type { Planner, PlannerInput, PlannerReply } from "../src/planner/types.js";
-import { fixture } from "./fixtures.js";
+import { fixture, type FixtureOptions } from "./fixtures.js";
 
 const budgets = { maxSteps: 8, maxWallMs: 60_000, maxTokens: 50_000 };
 
-async function run(scenario: Scenario, planner: Planner = new PlaybookPlanner(), injectLog?: string) {
-  const f = fixture(scenario, injectLog ? { injectLog } : {});
+async function run(
+  scenario: Scenario,
+  planner: Planner = new PlaybookPlanner(),
+  injectLog?: string,
+  opts: FixtureOptions = {},
+) {
+  const f = fixture(scenario, { ...opts, ...(injectLog ? { injectLog } : {}) });
   const steps: StepDraft[] = [];
   const result = await investigate({
     alert: {
@@ -53,6 +58,16 @@ describe("playbook investigations", () => {
     expect(note.likelyCause).toContain("1.4.2");
     expect(note.likelyCause.toLowerCase()).toContain("leak");
     expect(note.confidence).toBe("high");
+  });
+
+  // Regression: a live run blamed a blip on a rollback 16 min earlier, because the onset latched onto
+  // a previous outage still inside the window, and the blip hadn't cleared yet at investigate time.
+  it("noisy blip right after another incident, still clearing: still noise", async () => {
+    const { note } = await run("noisy-blip", undefined, undefined, { priorIncident: true, nowOffset: 60 });
+    expect(note.noise).toBe(true);
+    expect(note.summary).toMatch(/clearing up by itself/);
+    expect(note.likelyCause).not.toContain("1.4.0");
+    expect(note.ruledOut.join(" ")).toMatch(/No deploy of demo-api in the 10 minutes/);
   });
 
   it("noisy blip: calls it noise", async () => {

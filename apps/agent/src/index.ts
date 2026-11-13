@@ -26,7 +26,7 @@ const tel = initTelemetry({
 });
 const store = new Store(config.databaseUrl);
 const tracer = createTracer(config.langfuse);
-const investigateDelayMs = Number(process.env.INVESTIGATE_DELAY_MS ?? 45_000);
+const investigateDelayMs = Number(process.env.INVESTIGATE_DELAY_MS ?? 60_000);
 
 const app = Fastify({ logger: false, bodyLimit: 1_000_000, trustProxy: process.env.TRUST_PROXY === "true" });
 const limiter = new BreakItLimiter(config.breakIt.cooldownSeconds * 1000, config.breakIt.perIpPerHour);
