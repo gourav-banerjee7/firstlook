@@ -1,42 +1,182 @@
 /**
- * Firstlook agent (Phase 1 stub): receives Grafana alert webhooks and logs them, proving the
- * alert wiring end to end. Phase 2 replaces this with ingest, a queue and the investigator.
+ * Firstlook agent: receives Grafana alerts, groups them into incidents, investigates each one with
+ * read-only tools, and serves the results to the Incident Room.
  */
-import Fastify from "fastify";
+import { initTelemetry } from "@firstlook/telemetry";
+import Fastify, { type FastifyReply } from "fastify";
+import { config } from "./config.js";
+import { authenticate, parseAlerts } from "./ingest.js";
+import { createTracer } from "./langfuse.js";
+import { httpSources } from "./sources.js";
+import { Store } from "./store.js";
+import { startWorker } from "./worker.js";
 
-const port = Number(process.env.PORT ?? 8080);
-const token = process.env.WEBHOOK_TOKEN ?? "dev-webhook-token";
-
-interface GrafanaAlert {
-  status: string;
-  labels: Record<string, string>;
-  annotations: Record<string, string>;
-  startsAt: string;
+declare module "fastify" {
+  interface FastifyRequest {
+    rawBody?: Buffer;
+  }
 }
 
-const app = Fastify({ logger: false });
+const tel = initTelemetry({
+  serviceName: "firstlook-agent",
+  serviceVersion: "0.2.0",
+  otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+});
+const store = new Store(config.databaseUrl);
+const tracer = createTracer(config.langfuse);
+const investigateDelayMs = Number(process.env.INVESTIGATE_DELAY_MS ?? 45_000);
 
-app.get("/health", async () => ({ ok: true }));
+const app = Fastify({ logger: false, bodyLimit: 1_000_000 });
 
-app.post<{ Body: { status?: string; alerts?: GrafanaAlert[] } }>("/webhooks/grafana", async (req, reply) => {
-  if (req.headers.authorization !== `Bearer ${token}`) return reply.code(401).send({ error: "unauthorized" });
-  for (const a of req.body?.alerts ?? []) {
-    console.log(
-      JSON.stringify({
-        time: new Date().toISOString(),
-        msg: "alert received",
-        status: a.status,
-        alertname: a.labels.alertname,
-        service: a.labels.service,
-        severity: a.labels.severity,
-        summary: a.annotations.summary,
-        startsAt: a.startsAt,
-      }),
-    );
+// Keep the raw body: HMAC signatures are computed over the exact bytes Grafana sent.
+app.addContentTypeParser("application/json", { parseAs: "buffer" }, (req, body, done) => {
+  req.rawBody = body as Buffer;
+  try {
+    done(null, (body as Buffer).length ? JSON.parse((body as Buffer).toString("utf8")) : {});
+  } catch (err) {
+    (err as { statusCode?: number }).statusCode = 400;
+    done(err as Error, undefined);
   }
-  return reply.code(202).send({ accepted: req.body?.alerts?.length ?? 0 });
 });
 
-app
-  .listen({ port, host: "0.0.0.0" })
-  .then(() => console.log(JSON.stringify({ msg: "firstlook agent (stub) listening", port })));
+app.addHook("onRequest", async (req, reply) => {
+  reply.header("access-control-allow-origin", config.corsOrigin);
+  reply.header("access-control-allow-headers", "content-type, x-admin-token");
+  reply.header("access-control-allow-methods", "GET, POST, OPTIONS");
+  if (req.method === "OPTIONS") return reply.code(204).send();
+});
+
+app.get("/health", async () => ({ ok: true, planner: config.provider, langfuse: tracer.enabled }));
+
+// ---- ingest ----------------------------------------------------------------------------------
+
+app.post("/webhooks/grafana", async (req, reply) => {
+  const auth = authenticate(req.headers, req.rawBody ?? Buffer.alloc(0), {
+    token: config.webhookToken,
+    ...(process.env.WEBHOOK_HMAC_SECRET ? { hmacSecret: process.env.WEBHOOK_HMAC_SECRET } : {}),
+  });
+  if (!auth.ok) {
+    tel.log("warn", "webhook rejected", { reason: auth.reason });
+    return reply.code(401).send({ error: "unauthorized" });
+  }
+  let alerts;
+  try {
+    alerts = parseAlerts(req.body);
+  } catch {
+    return reply.code(400).send({ error: "not a Grafana alert payload" });
+  }
+  const outcomes = [];
+  for (const a of alerts) {
+    tel.log("info", "alert received", {
+      status: a.status,
+      alertname: a.alertName,
+      service: a.service,
+      severity: a.severity,
+      startsAt: a.startsAt.toISOString(),
+    });
+    const outcome = await store.ingest(a, investigateDelayMs);
+    tel.log("info", "alert ingested", {
+      alertname: a.alertName,
+      action: outcome.action,
+      "incident.id": outcome.incidentId ?? "",
+    });
+    outcomes.push(outcome);
+  }
+  return reply.code(202).send({ accepted: outcomes.length, outcomes });
+});
+
+// ---- Incident Room API ---------------------------------------------------------------------
+
+app.get<{ Querystring: { limit?: string } }>("/api/incidents", async (req) => ({
+  incidents: await store.incidents(Math.min(200, Number(req.query.limit ?? 50) || 50)),
+}));
+
+app.get<{ Params: { id: string } }>("/api/incidents/:id", async (req, reply) => {
+  const inc = await store.incident(req.params.id);
+  if (!inc) return reply.code(404).send({ error: "not found" });
+  return { incident: inc, steps: await store.steps(inc.id) };
+});
+
+/** Server-sent events: every step as it lands, plus incident status changes. */
+app.get<{ Params: { id: string } }>("/api/incidents/:id/stream", async (req, reply: FastifyReply) => {
+  const inc = await store.incident(req.params.id);
+  if (!inc) return reply.code(404).send({ error: "not found" });
+  reply.hijack();
+  const res = reply.raw;
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "access-control-allow-origin": config.corsOrigin,
+  });
+  const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  let lastSeq = 0;
+  let lastState = "";
+  let closed = false;
+  const started = Date.now();
+  req.raw.on("close", () => (closed = true));
+
+  while (!closed && Date.now() - started < 10 * 60_000) {
+    try {
+      for (const s of await store.steps(inc.id, lastSeq)) {
+        send("step", s);
+        lastSeq = Number(s.id.split(":").pop());
+      }
+      const now = await store.incident(inc.id);
+      const state = JSON.stringify([now?.status, now?.triagedAt, now?.resolvedAt, now?.flapping]);
+      if (now && state !== lastState) {
+        send("incident", now);
+        lastState = state;
+      }
+      res.write(": ping\n\n");
+    } catch {
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  res.end();
+});
+
+app.post<{ Params: { id: string } }>("/api/incidents/:id/reinvestigate", async (req, reply) => {
+  if (req.headers["x-admin-token"] !== config.adminToken) return reply.code(401).send({ error: "unauthorized" });
+  const inc = await store.incident(req.params.id);
+  if (!inc) return reply.code(404).send({ error: "not found" });
+  await store.enqueue("investigate", inc.id, `investigate:${inc.id}:${Date.now()}`);
+  return reply.code(202).send({ queued: true });
+});
+
+// ---- start -----------------------------------------------------------------------------------
+
+async function main() {
+  for (let i = 0; ; i++) {
+    try {
+      await store.migrate();
+      break;
+    } catch (err) {
+      if (i >= 20) throw err;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  const stop = startWorker({ store, sources: httpSources(config.sources), tracer, cfg: config, tel });
+  await app.listen({ port: config.port, host: "0.0.0.0" });
+  tel.log("info", "firstlook agent listening", {
+    port: config.port,
+    planner: config.provider,
+    langfuse: tracer.enabled,
+  });
+
+  const shutdown = async () => {
+    stop();
+    await app.close();
+    await store.pool.end();
+    await tel.shutdown();
+    process.exit(0);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+}
+
+main().catch((err) => {
+  tel.log("error", "startup failed", { error: (err as Error).message });
+  process.exit(1);
+});

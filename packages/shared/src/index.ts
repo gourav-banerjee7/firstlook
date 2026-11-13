@@ -23,6 +23,14 @@ export interface Evidence {
   url: string;
   /** The query behind the link, shown alongside it. */
   query: string;
+  /** The investigation step whose result proves the claim. */
+  step?: number;
+}
+
+/** A claim the agent made but could not back with a tool result; dropped from the note. */
+export interface DroppedClaim {
+  claim: string;
+  reason: string;
 }
 
 export interface TriageNote {
@@ -35,6 +43,10 @@ export interface TriageNote {
   runbook?: string;
   /** True when the agent judged the alert to be noise that needs no action. */
   noise: boolean;
+  /** Claims removed by verification, kept for transparency. */
+  dropped?: DroppedClaim[];
+  /** Which planner wrote it: playbook, or the model name. */
+  author?: string;
 }
 
 export type StepKind = "tool" | "thought" | "note" | "update";
@@ -66,4 +78,19 @@ export interface Incident {
   note?: TriageNote;
   /** Scenario that caused it, when known (demo mode only, never shown to the agent). */
   scenario?: Scenario;
+  severity?: string;
+  /** Every alert name grouped into this incident. */
+  alerts?: string[];
+  /** Fired, resolved and fired again within a short window. */
+  flapping?: boolean;
+  investigation?: InvestigationStats;
+}
+
+export interface InvestigationStats {
+  planner: string;
+  toolCalls: number;
+  tokens: { input: number; output: number };
+  wallMs: number;
+  budgetHit?: string;
+  traceId?: string;
 }

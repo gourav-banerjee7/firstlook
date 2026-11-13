@@ -60,6 +60,23 @@ services:
     environment:
       <<: *app-env
       WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-dev-webhook-token}
+      DATABASE_URL: postgres://firstlook:firstlook@postgres:5432/firstlook
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      TEMPO_URL: http://tempo:3200
+      DEPLOYS_URL: http://demo-api:8081/deploys
+      GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:3000}
+      # Unset = the built-in playbook. Set GEMINI_API_KEY (free tier) or LLM_PROVIDER=ollama to use a model.
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      INVESTIGATE_DELAY_MS: ${INVESTIGATE_DELAY_MS:-45000}
+    depends_on:
+      postgres: { condition: service_healthy }
     ports: ["8080:8080"]
 
   # ---- telemetry --------------------------------------------------------------------------------
