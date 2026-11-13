@@ -122,9 +122,9 @@ export class Faults {
 
   private startLeak() {
     if (this.leakTimer) return;
-    // Retain ~6 MB a second until the container's memory limit kills the process.
+    // Retain ~1 MB a second until the container's memory limit kills the process.
     this.leakTimer = setInterval(() => {
-      const chunk = Buffer.alloc(6 * 1024 * 1024, 1);
+      const chunk = Buffer.alloc(1024 * 1024, 1);
       this.leak.push(chunk);
     }, 1000);
   }

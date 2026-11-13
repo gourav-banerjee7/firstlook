@@ -7,6 +7,11 @@ SCENARIO="${1:-bad-deploy}"
 TIMEOUT="${2:-240}"
 API="${API_URL:-http://localhost:8081}"
 TOKEN="${ADMIN_TOKEN:-dev-admin-token}"
+case "$SCENARIO" in
+  bad-deploy) EXPECT="High P99 latency" ;;
+  memory-leak) EXPECT="Memory near limit" ;;
+  *) EXPECT="High 5xx error rate" ;;
+esac
 
 echo "→ starting scenario: $SCENARIO"
 curl -fsS -m 10 -X POST -H "x-admin-token: $TOKEN" "$API/admin/scenarios/$SCENARIO/start" >/dev/null
@@ -14,9 +19,9 @@ curl -fsS -m 10 -X POST -H "x-admin-token: $TOKEN" "$API/admin/scenarios/$SCENAR
 since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 deadline=$(( $(date +%s) + TIMEOUT ))
 while (( $(date +%s) < deadline )); do
-  if docker compose logs agent --since "$since" 2>/dev/null | grep -q '"msg":"alert received"'; then
+  if docker compose logs agent --since "$since" 2>/dev/null | grep '"status":"firing"' | grep -q "\"alertname\":\"$EXPECT\""; then
     echo "✓ alert reached the agent:"
-    docker compose logs agent --since "$since" --no-log-prefix 2>/dev/null | grep '"alert received"' | head -3
+    docker compose logs agent --since "$since" --no-log-prefix 2>/dev/null | grep '"status":"firing"' | grep "$EXPECT" | head -3
     curl -fsS -m 10 -X POST -H "x-admin-token: $TOKEN" "$API/admin/scenarios/$SCENARIO/stop" >/dev/null || true
     exit 0
   fi
