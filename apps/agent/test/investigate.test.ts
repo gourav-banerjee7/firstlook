@@ -67,6 +67,12 @@ describe("playbook investigations", () => {
     expect(note.ruledOut.join(" ")).toMatch(/follows payments-stub, not the release/);
   });
 
+  // Regression, fourth live case: a payments outage just before left a 95% error peak in the window.
+  it("bad deploy right after an outage: still the release", async () => {
+    const { note } = await run("bad-deploy", undefined, undefined, { priorDependencyPeak: true });
+    expect(note.likelyCause).toContain("1.4.1");
+  });
+
   it("memory leak: ties the climb to release 1.4.2", async () => {
     const { note } = await run("memory-leak");
     expect(note.likelyCause).toContain("1.4.2");

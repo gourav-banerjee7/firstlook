@@ -25,6 +25,8 @@ export interface FixtureOptions {
   priorIncident?: boolean;
   /** When the prior incident's rollback landed, in minutes before onset (default 16). */
   rollbackMinutesBefore?: number;
+  /** The payments dependency failed a few minutes before this alert, then recovered. */
+  priorDependencyPeak?: boolean;
   /** Override which alert fired (e.g. an outage that shows up as latency first). */
   alertName?: string;
   /** Seconds between onset and the investigation (default 180). */
@@ -49,7 +51,8 @@ export function fixture(scenario: Scenario, opts: FixtureOptions = {}): Fixture 
         ? Math.max(blip(x), prior(x))
         : prior(x);
   const memory = (x: number) => (scenario === "memory-leak" && x >= -80 ? 70e6 + (x + 80) * 1.05e6 : 70e6);
-  const depErr = (x: number) => (scenario === "dependency-outage" && x >= -45 ? 0.88 : 0);
+  const depErr = (x: number) =>
+    scenario === "dependency-outage" && x >= -45 ? 0.88 : opts.priorDependencyPeak && x >= -280 && x <= -200 ? 0.95 : 0;
   const depLat = (x: number) => (scenario === "dependency-outage" && x >= -45 ? 2.41 : 0.12);
 
   const deploys: Deploy[] = [

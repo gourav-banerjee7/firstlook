@@ -76,7 +76,8 @@ export function conclude(input: PlannerInput) {
   });
   const deps = find(history, "dependency_health");
   const depRows = (deps?.data as Row[] | undefined) ?? [];
-  const failing = (d: Row) => pct(d.errors_now) > 20 || pct(d.errors_peak) > 20;
+  // Judged on now, not the window peak: an earlier incident can leave a peak behind.
+  const failing = (d: Row) => pct(d.errors_now) > 20;
   const slow = (d: Row) => secs(d.p99_now) > 0.5 && secs(d.p99_now) > 3 * secs(d.p99_before);
   const badDep = depRows.find((d) => failing(d) || slow(d));
   const traces = find(history, "slow_traces");
