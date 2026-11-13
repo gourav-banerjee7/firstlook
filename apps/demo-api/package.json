@@ -10,6 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@firstlook/shared": "workspace:*"
+    "@firstlook/shared": "workspace:*",
+    "@firstlook/telemetry": "workspace:*",
+    "@opentelemetry/api": "^1.10.0",
+    "fastify": "^5.12.8",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
   }
 }
