@@ -1,0 +1,46 @@
+{{- if .Values.web.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+    {{- include "firstlook.selector" "web" | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels: {{- include "firstlook.selector" "web" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "firstlook.labels" . | nindent 8 }}
+        {{- include "firstlook.selector" "web" | nindent 8 }}
+    spec:
+      {{- include "firstlook.podSecurity" (dict "uid" 1000) | nindent 6 }}
+      containers:
+        - name: web
+          image: {{ include "firstlook.image" (dict "root" . "app" "web") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "firstlook.containerSecurity" . | nindent 10 }}
+          ports: [{ name: http, containerPort: 3000 }]
+          env:
+            # The Incident Room proxies /api/* here, so the browser only ever talks to the web pod.
+            - { name: AGENT_URL, value: "http://agent:8080" }
+          volumeMounts:
+            - { name: cache, mountPath: /app/apps/web/.next/cache }
+            - { name: tmp, mountPath: /tmp }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+      volumes:
+        - { name: cache, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "firstlook.selector" "web" | nindent 4 }}
+  ports: [{ name: http, port: 3000, targetPort: http }]
+{{- end }}

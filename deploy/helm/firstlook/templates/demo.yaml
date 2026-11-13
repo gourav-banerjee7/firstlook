@@ -1,0 +1,60 @@
+{{- if .Values.demo.enabled }}
+{{- $apps := list
+  (dict "name" "demo-api" "port" 8081 "env" (list (dict "name" "PAYMENTS_URL" "value" "http://payments-stub:8082")) "db" true)
+  (dict "name" "payments-stub" "port" 8082 "env" (list) "db" false)
+  (dict "name" "loadgen" "port" 0 "env" (list (dict "name" "TARGET_URL" "value" "http://demo-api:8081") (dict "name" "RPS" "value" (toString .Values.demo.loadgenRps))) "db" false) }}
+{{- range $apps }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  labels: {{- include "firstlook.labels" $ | nindent 4 }}
+    {{- include "firstlook.selector" .name | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "firstlook.selector" .name | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "firstlook.labels" $ | nindent 8 }}
+        {{- include "firstlook.selector" .name | nindent 8 }}
+    spec:
+      {{- include "firstlook.podSecurity" (dict "uid" 1000) | nindent 6 }}
+      containers:
+        - name: {{ .name }}
+          image: {{ include "firstlook.image" (dict "root" $ "app" .name) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- include "firstlook.containerSecurity" $ | nindent 10 }}
+          {{- if .port }}
+          ports: [{ name: http, containerPort: {{ .port }} }]
+          {{- end }}
+          env:
+            {{- include "firstlook.otlp" $ | nindent 12 }}
+            {{- include "firstlook.secretEnv" (dict "root" $ "name" "ADMIN_TOKEN" "key" "admin-token") | nindent 12 }}
+            {{- if .db }}
+            {{- include "firstlook.secretEnv" (dict "root" $ "name" "PG_PASSWORD" "key" "postgres-password") | nindent 12 }}
+            - { name: DATABASE_URL, value: "postgres://firstlook:$(PG_PASSWORD)@postgres:5432/demo" }
+            {{- end }}
+            {{- range .env }}
+            - { name: {{ .name }}, value: {{ .value | quote }} }
+            {{- end }}
+          {{- if .port }}
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          {{- end }}
+          resources: {{- toYaml $.Values.demo.resources | nindent 12 }}
+{{- if .port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels: {{- include "firstlook.labels" $ | nindent 4 }}
+spec:
+  selector: {{- include "firstlook.selector" .name | nindent 4 }}
+  ports: [{ name: http, port: {{ .port }}, targetPort: http }]
+{{- end }}
+{{- end }}
+{{- end }}

@@ -100,6 +100,30 @@ as a score.
 **Open a GitHub Issue per incident:** set `FIRSTLOOK_GITHUB_TOKEN` (fine-grained, Issues: write on one repo) and
 `FIRSTLOOK_GITHUB_REPO=owner/name`.
 
+## Kubernetes
+
+A Helm chart in [`deploy/helm/firstlook`](deploy/helm/firstlook), with images published to GHCR from `main`
+and every release.
+
+```bash
+helm install firstlook deploy/helm/firstlook -n firstlook --create-namespace
+kubectl -n firstlook port-forward svc/web 3001:3000      # Incident Room
+helm test firstlook -n firstlook
+```
+
+- **Self-contained by default:** the agent, the Incident Room, the demo system, Postgres, and a single-node
+  OTel Collector / Prometheus / Loki / Tempo / Grafana with the dashboard, alert rules and Firstlook contact
+  point provisioned from files. [`values-production.yaml`](deploy/helm/firstlook/values-production.yaml)
+  turns all of that off and points at your own backends, database and secrets.
+- **Hardened:** every pod runs as non-root with a read-only root filesystem, no capabilities, no
+  privilege escalation, the default seccomp profile and no service-account token. Requests, limits and
+  probes are set. Secrets are generated on install and kept across upgrades unless you bring your own.
+- **NetworkPolicies:** the agent can reach only its query APIs, its database, Grafana, the deploy log
+  and HTTPS to public addresses (model APIs, GitHub, Langfuse); Postgres accepts only the pods that use it.
+  Enforcement needs a CNI that supports it (Calico, Cilium).
+- **Proven in CI:** every PR installs the chart on a kind cluster, runs `helm test`, injects a bad deploy and
+  requires a triage note naming the release. Same script locally: `./scripts/k8s-smoke.sh`.
+
 ## Evals
 
 Every real incident becomes a test case. A **cassette** captures the raw telemetry behind it (every metric
@@ -135,7 +159,7 @@ with results mirrored to a Langfuse dataset when it's configured.
 | 2 · The investigator              | ingest, queue, tools, budgets, evidence-or-drop, injection hardening, Langfuse | ✅                                                  |
 | 3 · Incident Room and outputs     | live + recorded room, break-it, feedback, annotations, GitHub Issues           | ✅ (follow-up questions and ntfy/Slack still to do) |
 | 4 · Evals                         | recorded incidents as test cases, graders, model comparisons in CI             | ✅                                                  |
-| 5 · Kubernetes                    | Helm chart, k3s, GHCR images                                                   | next                                                |
+| 5 · Kubernetes                    | Helm chart, GHCR images, hardening, kind smoke test in CI                      | ✅                                                  |
 | 6 · Live demo                     | hosted, always-on demo                                                         |                                                     |
 | 7 · Stretch                       | see the [plan](docs/PLAN.md)                                                   |                                                     |
 
@@ -158,7 +182,7 @@ docs/runbooks/      the runbooks the alerts link to
 ## Stack
 
 TypeScript, Fastify, Postgres, OpenTelemetry, Prometheus, Loki, Tempo, Grafana + Terraform, Langfuse,
-Gemini / Ollama, Next.js, Docker Compose. Coming: Helm on k3s.
+Gemini / Ollama, Next.js, Docker Compose, Helm / Kubernetes.
 
 ## License
 

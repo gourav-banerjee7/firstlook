@@ -62,6 +62,16 @@ jobs:
           terraform fmt -check -recursive
           terraform init -backend=false -input=false
           terraform validate
+      - uses: azure/setup-helm@v4
+      - name: Helm lint and render (demo and production values)
+        working-directory: deploy/helm/firstlook
+        run: |
+          helm lint .
+          helm lint . -f values-production.yaml
+          helm template t . > /dev/null
+          helm template t . -f values-production.yaml > /dev/null
+      - name: Chart dashboard matches the Terraform one
+        run: diff infra/terraform/grafana/dashboards/demo-api.json deploy/helm/firstlook/files/dashboards/demo-api.json
       - name: Dashboards are valid JSON
         run: for f in infra/terraform/grafana/dashboards/*.json; do jq empty "$f"; done
 
@@ -69,14 +79,49 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [demo-api, payments-stub, loadgen, agent]
+        include:
+          - { app: demo-api, file: Dockerfile }
+          - { app: payments-stub, file: Dockerfile }
+          - { app: loadgen, file: Dockerfile }
+          - { app: agent, file: Dockerfile }
+          - { app: web, file: apps/web/Dockerfile }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.file }}
           build-args: APP=${{ matrix.app }}
           push: false
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  # The full loop on Kubernetes: install the chart on kind, run helm test, inject a bad deploy,
+  # and require a triage note that names the release.
+  kubernetes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build images
+        run: |
+          for app in agent demo-api payments-stub loadgen; do
+            docker build -q --build-arg APP=$app -t ghcr.io/gourav-banerjee7/firstlook-$app:ci . &
+          done
+          docker build -q -f apps/web/Dockerfile -t ghcr.io/gourav-banerjee7/firstlook-web:ci . &
+          wait
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: firstlook
+      - name: Load images into kind
+        run: for app in agent demo-api payments-stub loadgen web; do kind load docker-image --name firstlook ghcr.io/gourav-banerjee7/firstlook-$app:ci; done
+      - name: Smoke test
+        run: IMAGE_TAG=ci ./scripts/k8s-smoke.sh bad-deploy
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n firstlook get pods -o wide
+          kubectl -n firstlook describe pods | tail -100
+          for d in agent grafana demo-api; do echo "== $d"; kubectl -n firstlook logs deploy/$d --tail 60 || true; done

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-test-agent
+  labels:
+    app.kubernetes.io/name: firstlook-test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  {{- include "firstlook.podSecurity" (dict "uid" 1000) | nindent 2 }}
+  containers:
+    - name: check
+      image: curlimages/curl:8.11.1
+      {{- include "firstlook.containerSecurity" . | nindent 6 }}
+      command: [sh, -c]
+      args:
+        - curl -fsS http://agent:8080/health && curl -fsS http://agent:8080/api/incidents?limit=1 >/dev/null && echo agent ok

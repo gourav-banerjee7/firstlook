@@ -1,0 +1,103 @@
+# Firstlook Helm values. Defaults give a complete, self-contained demo (one release per namespace):
+# the agent and Incident Room, the demo system to break, and a single-node observability bundle.
+# For a real cluster, see values-production.yaml.
+
+image:
+  registry: ghcr.io/gourav-banerjee7
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Tokens and keys. Leave empty to have random ones generated (and kept across upgrades), or point at a
+# Secret you manage with keys: webhook-token, admin-token, postgres-password, gemini-api-key,
+# langfuse-public-key, langfuse-secret-key, github-token, grafana-admin-password.
+secrets:
+  existingSecret: ""
+  webhookToken: ""
+  adminToken: ""
+  postgresPassword: ""
+  grafanaAdminPassword: ""
+  geminiApiKey: ""
+  langfusePublicKey: ""
+  langfuseSecretKey: ""
+  githubToken: ""
+
+agent:
+  replicas: 1
+  # playbook (no LLM), gemini (needs secrets.geminiApiKey) or ollama.
+  planner: playbook
+  geminiModel: gemini-3.5-flash
+  ollamaUrl: ""
+  investigateDelayMs: 60000
+  # Where humans open Grafana; used to build evidence links.
+  grafanaPublicUrl: http://localhost:3000
+  breakIt:
+    enabled: true
+    cooldownSeconds: 120
+  langfuseHost: ""
+  githubRepo: ""
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+web:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+
+# The bookings system to break, with its fault injector and steady traffic.
+demo:
+  enabled: true
+  loadgenRps: 12
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    # demo-api keeps a real limit, so the memory-leak scenario ends in OOM kills.
+    limits: { memory: 220Mi }
+
+postgresql:
+  # Off: set externalUrl (the agent's database) instead.
+  enabled: true
+  image: postgres:16-alpine
+  externalUrl: ""
+  # emptyDir by default (demo data); set a size to use a PersistentVolumeClaim.
+  persistence:
+    size: ""
+    storageClass: ""
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+observability:
+  # true: run a single-node OTel Collector, Prometheus, Loki, Tempo and Grafana (provisioned with the
+  # dashboard, alert rules and the Firstlook contact point). For dev, demos and CI, not production.
+  bundled: true
+  # Used when bundled is false: where the agent queries telemetry and where apps send OTLP.
+  prometheusUrl: http://prometheus:9090
+  lokiUrl: http://loki:3100
+  tempoUrl: http://tempo:3200
+  grafanaUrl: http://grafana:3000
+  otlpEndpoint: http://otel-collector:4318
+  images:
+    collector: otel/opentelemetry-collector-contrib:0.115.1
+    prometheus: prom/prometheus:v3.0.1
+    loki: grafana/loki:3.3.2
+    tempo: grafana/tempo:2.6.1
+    grafana: grafana/grafana:11.4.0
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+# Alert thresholds for the bundled Grafana's rules.
+alerts:
+  latencyP99Seconds: 0.8
+  errorRateRatio: 0.05
+  memoryBytes: 150000000
+
+networkPolicy:
+  # Locks the agent down to its query APIs, its database, its outputs and HTTPS egress for model APIs.
+  # Needs a CNI that enforces NetworkPolicy (Calico, Cilium, ...).
+  enabled: true
+  # Private ranges the agent may NOT reach over its general HTTPS egress rule.
+  denyEgressCidrs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]

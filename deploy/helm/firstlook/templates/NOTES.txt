@@ -1,0 +1,14 @@
+Firstlook is starting in namespace {{ .Release.Namespace }}.
+
+Incident Room:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/web 3001:3000      # http://localhost:3001
+{{- if .Values.observability.bundled }}
+Grafana (anonymous viewer; admin password in secret {{ include "firstlook.secretName" . }}):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/grafana 3000:3000  # http://localhost:3000
+{{- end }}
+{{- if .Values.demo.enabled }}
+
+Break something from the Incident Room, then watch Grafana alert and Firstlook investigate.
+{{- end }}
+
+Check the install:  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

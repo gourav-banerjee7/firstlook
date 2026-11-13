@@ -1,0 +1,26 @@
+# Example values for a real cluster: your own telemetry backends, no demo system, a model, a managed
+# database and secrets from your secret manager.
+observability:
+  bundled: false
+  prometheusUrl: http://prometheus-server.monitoring:80
+  lokiUrl: http://loki-gateway.monitoring:80
+  tempoUrl: http://tempo.monitoring:3200
+  grafanaUrl: http://grafana.monitoring:80
+  otlpEndpoint: http://otel-collector.monitoring:4318
+
+demo:
+  enabled: false
+
+postgresql:
+  enabled: false
+  externalUrl: postgres://firstlook:$(PG_PASSWORD)@firstlook-db.internal:5432/firstlook
+
+secrets:
+  existingSecret: firstlook # webhook-token, admin-token, postgres-password, gemini-api-key, ...
+
+agent:
+  replicas: 2
+  planner: gemini
+  grafanaPublicUrl: https://grafana.example.com
+  langfuseHost: https://langfuse.example.com
+  githubRepo: your-org/incidents

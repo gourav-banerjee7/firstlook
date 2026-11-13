@@ -1,0 +1,74 @@
+{{- $v := .Values.agent }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+    {{- include "firstlook.selector" "agent" | nindent 4 }}
+spec:
+  # Ingest and workers are one process; several replicas are safe (jobs are claimed with SKIP LOCKED).
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels: {{- include "firstlook.selector" "agent" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "firstlook.labels" . | nindent 8 }}
+        {{- include "firstlook.selector" "agent" | nindent 8 }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      {{- include "firstlook.podSecurity" (dict "uid" 1000) | nindent 6 }}
+      containers:
+        - name: agent
+          image: {{ include "firstlook.image" (dict "root" . "app" "agent") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "firstlook.containerSecurity" . | nindent 10 }}
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "WEBHOOK_TOKEN" "key" "webhook-token") | nindent 12 }}
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "ADMIN_TOKEN" "key" "admin-token") | nindent 12 }}
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "PG_PASSWORD" "key" "postgres-password") | nindent 12 }}
+            - name: DATABASE_URL
+              value: {{ .Values.postgresql.externalUrl | default "postgres://firstlook:$(PG_PASSWORD)@postgres:5432/firstlook" | quote }}
+            - { name: PROMETHEUS_URL, value: {{ .Values.observability.prometheusUrl | quote }} }
+            - { name: LOKI_URL, value: {{ .Values.observability.lokiUrl | quote }} }
+            - { name: TEMPO_URL, value: {{ .Values.observability.tempoUrl | quote }} }
+            - { name: DEPLOYS_URL, value: "http://demo-api:8081/deploys" }
+            - { name: DEMO_API_URL, value: "http://demo-api:8081" }
+            - { name: GRAFANA_PUBLIC_URL, value: {{ $v.grafanaPublicUrl | quote }} }
+            - { name: GRAFANA_API_URL, value: {{ .Values.observability.grafanaUrl | quote }} }
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "GRAFANA_ADMIN_PASSWORD" "key" "grafana-admin-password") | nindent 12 }}
+            - name: GRAFANA_API_AUTH
+              value: "admin:$(GRAFANA_ADMIN_PASSWORD)"
+            - { name: LLM_PROVIDER, value: {{ $v.planner | quote }} }
+            - { name: GEMINI_MODEL, value: {{ $v.geminiModel | quote }} }
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "GEMINI_API_KEY" "key" "gemini-api-key" "optional" true) | nindent 12 }}
+            {{- with $v.ollamaUrl }}
+            - { name: OLLAMA_URL, value: {{ . | quote }} }
+            {{- end }}
+            - { name: INVESTIGATE_DELAY_MS, value: {{ $v.investigateDelayMs | quote }} }
+            - { name: BREAK_IT_ENABLED, value: {{ and $v.breakIt.enabled .Values.demo.enabled | quote }} }
+            - { name: BREAK_IT_COOLDOWN_SECONDS, value: {{ $v.breakIt.cooldownSeconds | quote }} }
+            - { name: LANGFUSE_HOST, value: {{ $v.langfuseHost | quote }} }
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "LANGFUSE_PUBLIC_KEY" "key" "langfuse-public-key" "optional" true) | nindent 12 }}
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "LANGFUSE_SECRET_KEY" "key" "langfuse-secret-key" "optional" true) | nindent 12 }}
+            - { name: GITHUB_REPO, value: {{ $v.githubRepo | quote }} }
+            {{- include "firstlook.secretEnv" (dict "root" . "name" "GITHUB_TOKEN" "key" "github-token" "optional" true) | nindent 12 }}
+            {{- include "firstlook.otlp" . | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 15
+            failureThreshold: 4
+          resources: {{- toYaml $v.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "firstlook.selector" "agent" | nindent 4 }}
+  ports: [{ name: http, port: 8080, targetPort: http }]

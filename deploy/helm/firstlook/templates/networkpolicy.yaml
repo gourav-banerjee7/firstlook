@@ -1,0 +1,79 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- /*
+  The agent reads untrusted text (logs, span names, deploy messages) and talks to a model, so its network
+  is the second line of defence after "no write tools": in-cluster it may reach only its query APIs, its
+  database, Grafana (annotations), the deploy log and the collector; outside, only HTTPS to public
+  addresses (model APIs, GitHub, Langfuse). Postgres accepts only the pods that use it.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "firstlook.selector" "agent" | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Webhooks from Grafana, API calls from the Incident Room and from `helm test`.
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: grafana } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: web } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: firstlook-test } }
+      ports: [{ port: 8080 }]
+  egress:
+    - to: [{ namespaceSelector: {}, podSelector: { matchLabels: { k8s-app: kube-dns } } }]
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: postgres } } }]
+      ports: [{ port: 5432 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: prometheus } } }]
+      ports: [{ port: 9090 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: loki } } }]
+      ports: [{ port: 3100 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: tempo } } }]
+      ports: [{ port: 3200 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: grafana } } }]
+      ports: [{ port: 3000 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: demo-api } } }]
+      ports: [{ port: 8081 }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: otel-collector } } }]
+      ports: [{ port: 4318 }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: {{- toYaml .Values.networkPolicy.denyEgressCidrs | nindent 14 }}
+      ports: [{ port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "firstlook.selector" "web" | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ namespaceSelector: {}, podSelector: { matchLabels: { k8s-app: kube-dns } } }]
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: agent } } }]
+      ports: [{ port: 8080 }]
+{{- if .Values.postgresql.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+  labels: {{- include "firstlook.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "firstlook.selector" "postgres" | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: agent } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: demo-api } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: grafana } }
+      ports: [{ port: 5432 }]
+{{- end }}
+{{- end }}

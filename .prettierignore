@@ -6,3 +6,5 @@ infra/**/*.json
 apps/agent/evals/cases/
 apps/agent/evals/results.*
 apps/web/data/recorded.json
+deploy/helm/**/templates/
+deploy/helm/**/files/
