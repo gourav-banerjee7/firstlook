@@ -1,5 +1,7 @@
 # Firstlook
 
+[![CI](https://github.com/gourav-banerjee7/firstlook/actions/workflows/ci.yml/badge.svg)](https://github.com/gourav-banerjee7/firstlook/actions/workflows/ci.yml)
+
 **An AI first responder for on-call.** When an alert fires, Firstlook investigates the way a good engineer
 does in their first ten minutes (metrics, logs, traces, what changed), then writes a triage note where every
 claim links to the evidence. It stays on the incident until it resolves. It reads; it never changes anything.

@@ -20,19 +20,19 @@ This plan builds it in phases. **Every phase ends in something you can run and d
 
 ## Stack
 
-| Concern | Choice |
-|---|---|
-| Language | TypeScript (Node 22), pnpm workspaces monorepo |
-| Demo service | Small HTTP API instrumented with OpenTelemetry, with fault injection |
-| Telemetry | OpenTelemetry Collector → Prometheus (metrics), Loki (logs), Tempo (traces) |
-| Dashboards + alerts | Grafana, provisioned with Terraform (`grafana/grafana` provider) |
-| Agent state + queue | Postgres (`SKIP LOCKED` job queue, incidents, steps, feedback) |
-| LLM | Gemini (free tier) via a provider interface; Ollama and a deterministic mock for tests |
-| LLM observability + evals | Langfuse (traces, cost, scores, datasets) |
-| UI | Incident Room: Next.js app with live updates (server-sent events) |
-| Outputs | Incident Room, GitHub Issues, Grafana annotations; ntfy and Slack as optional adapters |
-| Runtime | Docker Compose (dev) → Helm chart on k3s (live) |
-| CI | GitHub Actions: lint, typecheck, tests, evals, image builds, Helm lint, kind smoke test |
+| Concern                   | Choice                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| Language                  | TypeScript (Node 22), pnpm workspaces monorepo                                          |
+| Demo service              | Small HTTP API instrumented with OpenTelemetry, with fault injection                    |
+| Telemetry                 | OpenTelemetry Collector → Prometheus (metrics), Loki (logs), Tempo (traces)             |
+| Dashboards + alerts       | Grafana, provisioned with Terraform (`grafana/grafana` provider)                        |
+| Agent state + queue       | Postgres (`SKIP LOCKED` job queue, incidents, steps, feedback)                          |
+| LLM                       | Gemini (free tier) via a provider interface; Ollama and a deterministic mock for tests  |
+| LLM observability + evals | Langfuse (traces, cost, scores, datasets)                                               |
+| UI                        | Incident Room: Next.js app with live updates (server-sent events)                       |
+| Outputs                   | Incident Room, GitHub Issues, Grafana annotations; ntfy and Slack as optional adapters  |
+| Runtime                   | Docker Compose (dev) → Helm chart on k3s (live)                                         |
+| CI                        | GitHub Actions: lint, typecheck, tests, evals, image builds, Helm lint, kind smoke test |
 
 ## Architecture
 
@@ -57,6 +57,7 @@ flowchart LR
 ## Phases
 
 ### Phase 0 — Foundations · `v0.0.1`
+
 Get the repo, tooling and CI in place before any feature work.
 
 - Monorepo scaffold: `apps/demo-api`, `apps/agent`, `apps/web`, `packages/shared`, `infra/`
@@ -67,6 +68,7 @@ Get the repo, tooling and CI in place before any feature work.
 **Done when:** a PR with a trivial change goes green in CI and merges.
 
 ### Phase 1 — An observable system to break · `v0.1.0`
+
 A small service worth monitoring, the full telemetry stack, and alerts defined as code.
 
 - `demo-api`: a bookings-style API (Postgres-backed) with OpenTelemetry metrics, structured logs and traces
@@ -83,6 +85,7 @@ A small service worth monitoring, the full telemetry stack, and alerts defined a
 **Done when:** `docker compose up`, trigger "bad deploy", watch the dashboard spike and the alert reach the stub.
 
 ### Phase 2 — The investigator · `v0.2.0`
+
 The agent itself: from alert to grounded triage note.
 
 - Ingest: webhook endpoint with signature check, dedupe (fingerprint + window), grouping of related alerts
@@ -106,6 +109,7 @@ The agent itself: from alert to grounded triage note.
 **Done when:** each of the four scenarios produces a stored triage note naming the right cause, with valid links.
 
 ### Phase 3 — Incident Room and outputs · `v0.3.0`
+
 Make it visible and interactive, with no Slack required.
 
 - Incident Room web app: incident list, live timeline, the investigation streaming step by step (each
@@ -122,6 +126,7 @@ Make it visible and interactive, with no Slack required.
 the triage note appear, the GitHub issue open, and the Grafana annotation land.
 
 ### Phase 4 — Evals · `v0.4.0`
+
 Turn "it seems to work" into a score.
 
 - Recorded incidents: snapshots of telemetry and tool responses per scenario, replayable without the stack
@@ -134,6 +139,7 @@ Turn "it seems to work" into a score.
 **Done when:** CI reports a pass rate per scenario, and a prompt change that breaks diagnosis fails the build.
 
 ### Phase 5 — Kubernetes · `v0.5.0`
+
 Package it the way a platform team would ship it.
 
 - Production Dockerfiles (multi-stage, non-root, small images), published to GHCR by CI
@@ -147,6 +153,7 @@ Package it the way a platform team would ship it.
 **Done when:** `helm install` on a fresh kind cluster runs the full loop, and CI proves it on every PR.
 
 ### Phase 6 — Live demo · `v1.0.0`
+
 A public link anyone can try.
 
 - k3s on a free-tier VM (Oracle Cloud Always Free ARM), provisioned with Terraform where the provider allows
@@ -159,6 +166,7 @@ A public link anyone can try.
 **Done when:** the live link works end to end for a stranger, and the README tells the story without a click.
 
 ### Phase 7 — Stretch
+
 - Argo CD (GitOps) instead of push-based deploys
 - KEDA scaling of investigator workers on queue depth
 - "Approve to run": one safe action (`helm rollback`) behind explicit human approval and an audit log
@@ -166,15 +174,17 @@ A public link anyone can try.
 - Optional Terraform module to run the same containers on AWS
 
 ## Definition of done for every change
+
 - CI green: lint, typecheck, tests (and evals from Phase 4)
 - Docs updated where behaviour changes
 - No secrets in the repo; config through environment variables with an `.env.example`
 
 ## Risks and how the plan handles them
-| Risk | Mitigation |
-|---|---|
-| Agent guesses instead of investigating | Evidence-or-drop rule, graders for invented numbers, fixed playbook to start from |
-| Free-tier limits (model, VM) | Budgets per investigation, mock/recorded mode for CI, Ollama fallback |
-| Prompt injection via logs | Tool output treated as data, escaping, read-only credentials, network policy |
-| Kubernetes eats the schedule | Compose first; Kubernetes only after the agent is good (Phase 5) |
-| Self-hosted Langfuse too heavy for a small VM | Langfuse Cloud free tier for the live demo |
+
+| Risk                                          | Mitigation                                                                        |
+| --------------------------------------------- | --------------------------------------------------------------------------------- |
+| Agent guesses instead of investigating        | Evidence-or-drop rule, graders for invented numbers, fixed playbook to start from |
+| Free-tier limits (model, VM)                  | Budgets per investigation, mock/recorded mode for CI, Ollama fallback             |
+| Prompt injection via logs                     | Tool output treated as data, escaping, read-only credentials, network policy      |
+| Kubernetes eats the schedule                  | Compose first; Kubernetes only after the agent is good (Phase 5)                  |
+| Self-hosted Langfuse too heavy for a small VM | Langfuse Cloud free tier for the live demo                                        |
