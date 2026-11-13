@@ -1,7 +1,10 @@
 {
   "uid": "demo-api",
   "title": "demo-api service",
-  "tags": ["firstlook", "demo"],
+  "tags": [
+    "firstlook",
+    "demo"
+  ],
   "timezone": "browser",
   "refresh": "5s",
   "time": {
