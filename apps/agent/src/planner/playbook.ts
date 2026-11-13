@@ -103,9 +103,15 @@ export function conclude(input: PlannerInput) {
     kind === "errors" &&
     (ov.recovered === true || ov.falling === true) &&
     Number(ov.elevated_minutes) <= 3 &&
-    !deploy &&
     !badDep
   ) {
+    // The shape decides this one: a bad release causes a sustained change, not a burst that clears
+    // by itself. So a recent deploy is ruled out with that reason rather than blamed.
+    if (deploy) {
+      ruled.push(
+        `Release ${deploy.version} "${deploy.description}" (${deploy.minutes_before_onset} min before onset): a bad release causes a sustained change, not a burst that clears on its own.`,
+      );
+    }
     say(
       overview,
       `5xx error rate peaked at ${ov.peak}, was elevated for ${ov.elevated_minutes} min and ${ov.recovered ? "has recovered" : "is already falling"} (now ${ov.now}).`,
@@ -114,8 +120,8 @@ export function conclude(input: PlannerInput) {
     return {
       summary: `A ${ov.elevated_minutes}-minute burst of errors on ${alert.service} that is clearing up by itself.`,
       likely_cause: topLog
-        ? `Transient "${topLog.message}" errors; nothing changed and no dependency is failing.`
-        : "A transient blip; nothing changed.",
+        ? `Transient "${topLog.message}" errors; no dependency is failing${deploy ? "" : " and nothing changed"}.`
+        : "A transient blip.",
       confidence: "medium" as const,
       evidence,
       ruled_out: ruled,

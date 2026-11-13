@@ -70,6 +70,19 @@ describe("playbook investigations", () => {
     expect(note.ruledOut.join(" ")).toMatch(/No deploy of demo-api in the 10 minutes/);
   });
 
+  // Regression, second live case: the rollback landed only 5 min before the blip.
+  it("noisy blip 5 min after a rollback: noise, and the rollback is ruled out with a reason", async () => {
+    const { note } = await run("noisy-blip", undefined, undefined, {
+      priorIncident: true,
+      rollbackMinutesBefore: 5,
+      nowOffset: 60,
+    });
+    expect(note.noise).toBe(true);
+    expect(note.ruledOut.join(" ")).toMatch(
+      /Release 1\.4\.0 "Rollback to 1\.4\.0" \(5 min before onset\): a bad release causes a sustained change/,
+    );
+  });
+
   it("noisy blip: calls it noise", async () => {
     const { note } = await run("noisy-blip");
     expect(note.noise).toBe(true);

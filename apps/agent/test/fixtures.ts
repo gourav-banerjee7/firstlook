@@ -23,6 +23,8 @@ export interface FixtureOptions {
   injectLog?: string;
   /** An unrelated outage 10 to 6 minutes before this alert, and its rollback deploy. */
   priorIncident?: boolean;
+  /** When the prior incident's rollback landed, in minutes before onset (default 16). */
+  rollbackMinutesBefore?: number;
   /** Seconds between onset and the investigation (default 180). */
   nowOffset?: number;
 }
@@ -64,7 +66,7 @@ export function fixture(scenario: Scenario, opts: FixtureOptions = {}): Fixture 
       commit: "f3a91c2",
       description: "Rollback to 1.4.0",
       author: "firstlook-demo",
-      at: at(-16 * 60),
+      at: at(-(opts.rollbackMinutesBefore ?? 16) * 60),
     });
   if (scenario === "bad-deploy")
     deploys.unshift({
