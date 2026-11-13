@@ -75,6 +75,14 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       INVESTIGATE_DELAY_MS: ${INVESTIGATE_DELAY_MS:-45000}
+      DEMO_API_URL: http://demo-api:8081
+      BREAK_IT_COOLDOWN_SECONDS: ${BREAK_IT_COOLDOWN_SECONDS:-120}
+      # Outputs: annotations on the Grafana dashboard; GitHub Issues only if you set a token and repo.
+      GRAFANA_API_URL: http://grafana:3000
+      GRAFANA_API_AUTH: ${GRAFANA_API_AUTH:-admin:admin}
+      GITHUB_TOKEN: ${FIRSTLOOK_GITHUB_TOKEN:-}
+      GITHUB_REPO: ${FIRSTLOOK_GITHUB_REPO:-}
+      INCIDENT_ROOM_URL: ${INCIDENT_ROOM_URL:-http://localhost:3001}
     depends_on:
       postgres: { condition: service_healthy }
     ports: ["8080:8080"]
@@ -118,6 +126,8 @@ services:
       # Viewers can open evidence links without logging in.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Lets anonymous viewers open Explore, so evidence links work; they still cannot save anything.
+      GF_USERS_VIEWERS_CAN_EDIT: "true"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
     volumes:
       - grafana-data:/var/lib/grafana

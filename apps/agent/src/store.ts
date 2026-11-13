@@ -31,7 +31,7 @@ export interface Job {
   attempts: number;
 }
 
-const REOPEN_WINDOW_MIN = 10;
+const REOPEN_WINDOW_MIN = 5;
 const GROUP_WINDOW_MIN = 30;
 const FLAP_FIRINGS = 3;
 const FLAP_WINDOW_MIN = 15;
@@ -68,8 +68,10 @@ export class Store {
         runbook_url   text,
         note          jsonb,
         stats         jsonb,
+        feedback      jsonb,
         created_at    timestamptz NOT NULL DEFAULT now()
       );
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS feedback jsonb;
       CREATE INDEX IF NOT EXISTS incidents_open ON incidents (service) WHERE status <> 'resolved';
       CREATE INDEX IF NOT EXISTS incidents_recent ON incidents (created_at DESC);
 
@@ -199,7 +201,17 @@ export class Store {
         title: `Fired again ${mins} min after resolving`,
         detail: a.summary,
       });
-      return { incidentId: inc.id, action: "reopened", flapping: await this.checkFlap(c, inc.id, a) };
+      // Re-check what's going on, unless it's flapping (then re-investigating each time is just noise).
+      const flapping = await this.checkFlap(c, inc.id, a);
+      if (!flapping) {
+        await c.query("UPDATE incidents SET status = 'investigating' WHERE id = $1", [inc.id]);
+        await c.query(
+          `INSERT INTO jobs (kind, incident_id, idempotency_key, run_after) VALUES ('investigate', $1, $2, now() + make_interval(secs => $3))
+           ON CONFLICT (idempotency_key) DO NOTHING`,
+          [inc.id, `investigate:${inc.id}:${a.startsAt.toISOString()}`, delayMs / 1000],
+        );
+      }
+      return { incidentId: inc.id, action: "reopened", flapping };
     }
 
     const id = newIncidentId();
@@ -356,6 +368,14 @@ export class Store {
          status = CASE WHEN status = 'resolved' THEN status ELSE 'triaged' END WHERE id = $1`,
       [id, JSON.stringify(note), JSON.stringify(stats)],
     );
+  }
+
+  async saveFeedback(id: string, helpful: boolean) {
+    const r = await this.pool.query("UPDATE incidents SET feedback = $2 WHERE id = $1 AND note IS NOT NULL", [
+      id,
+      JSON.stringify({ helpful, at: new Date().toISOString() }),
+    ]);
+    return (r.rowCount ?? 0) > 0;
   }
 
   // ---- queue ---------------------------------------------------------------------------------

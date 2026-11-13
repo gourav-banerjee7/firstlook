@@ -5,6 +5,7 @@
 import type { Telemetry } from "@firstlook/telemetry";
 import type { Config } from "./config.js";
 import { investigate } from "./investigator.js";
+import { publish } from "./outputs.js";
 import type { Tracer } from "./langfuse.js";
 import { createPlanner } from "./planner/index.js";
 import { clean } from "./sanitize.js";
@@ -73,6 +74,11 @@ export function startWorker(deps: {
       ...(result.budgetHit ? { budgetHit: result.budgetHit } : {}),
       ...(trace ? { traceId: trace.traceId } : {}),
     });
+    const saved = await store.incident(inc.id);
+    if (saved)
+      await publish(saved, result.note, cfg.outputs, (msg, attrs) =>
+        tel.log("info", msg, attrs as Parameters<typeof tel.log>[2]),
+      );
     await store.complete(job.id);
     tel.log("info", "incident triaged", {
       "incident.id": inc.id,

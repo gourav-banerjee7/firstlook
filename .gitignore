@@ -10,3 +10,5 @@ coverage/
 *.tfstate
 *.tfstate.*
 .terraform/
+.vercel
+.env*
