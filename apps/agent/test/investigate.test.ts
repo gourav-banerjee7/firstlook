@@ -53,6 +53,20 @@ describe("playbook investigations", () => {
     expect(note.evidence.some((e) => e.claim.includes("88.0%"))).toBe(true);
   });
 
+  // Regression, third live case: the outage's latency alert fired first, and a rollback 7 min earlier
+  // was blamed because the latency playbook looked at deploys before dependencies.
+  it("outage that alerts on latency first, after a recent rollback: blames the dependency", async () => {
+    const { note } = await run("dependency-outage", undefined, undefined, {
+      alertName: "High P99 latency",
+      priorIncident: true,
+      rollbackMinutesBefore: 3,
+    });
+    expect(note.summary).toBe("demo-api is slow because payments-stub is failing.");
+    expect(note.likelyCause).not.toContain("1.4.0");
+    expect(note.evidence.some((e) => e.claim.includes("POST payments-stub"))).toBe(true);
+    expect(note.ruledOut.join(" ")).toMatch(/follows payments-stub, not the release/);
+  });
+
   it("memory leak: ties the climb to release 1.4.2", async () => {
     const { note } = await run("memory-leak");
     expect(note.likelyCause).toContain("1.4.2");
@@ -67,7 +81,7 @@ describe("playbook investigations", () => {
     expect(note.noise).toBe(true);
     expect(note.summary).toMatch(/clearing up by itself/);
     expect(note.likelyCause).not.toContain("1.4.0");
-    expect(note.ruledOut.join(" ")).toMatch(/No deploy of demo-api in the 10 minutes/);
+    expect(note.ruledOut.join(" ")).toMatch(/No deploy of demo-api in the 5 minutes before the signal rose/);
   });
 
   // Regression, second live case: the rollback landed only 5 min before the blip.

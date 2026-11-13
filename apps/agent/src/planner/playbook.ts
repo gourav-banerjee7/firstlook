@@ -23,10 +23,10 @@ const SEQUENCES: Record<Kind, Array<{ tool: string; args: Record<string, unknown
       args: { signal: "latency_p99" },
       reason: "See when latency left its baseline and how far.",
     },
-    { tool: "recent_changes", args: {}, reason: "A deploy shortly before onset is the most common cause." },
+    { tool: "dependency_health", args: {}, reason: "A slow downstream service makes us slow too." },
+    { tool: "recent_changes", args: {}, reason: "A deploy just before latency rose is the most common cause." },
     { tool: "slow_traces", args: { min_ms: 500 }, reason: "Find where the time in slow requests goes." },
     { tool: "metric_breakdown", args: { signal: "latency_p99", by: "route" }, reason: "Is it every route or one?" },
-    { tool: "dependency_health", args: {}, reason: "Rule out a slow downstream service." },
   ],
   errors: [
     {
@@ -46,6 +46,15 @@ const SEQUENCES: Record<Kind, Array<{ tool: string; args: Record<string, unknown
 };
 
 const pct = (s: unknown) => (typeof s === "string" ? Number(s.replace("%", "")) : NaN);
+/** "98 ms" / "4.25 s" back to seconds. */
+const secs = (s: unknown) => {
+  if (typeof s !== "string") return NaN;
+  const n = Number.parseFloat(s);
+  return s.trim().endsWith("ms") ? n / 1000 : n;
+};
+
+/** A change explains a problem only if the signal rose within this long after it. */
+const DEPLOY_WINDOW_MS = 5 * 60_000;
 
 function find(history: HistoryItem[], tool: string) {
   return history.find((h) => h.tool === tool && !h.error);
@@ -59,15 +68,17 @@ export function conclude(input: PlannerInput) {
   const overview = find(history, "metric_overview");
   const ov = (overview?.data ?? {}) as Row;
   const changes = find(history, "recent_changes");
+  // Measured from when the signal actually left baseline, not from when the alert fired.
+  const rose = typeof ov.rose_at_iso === "string" ? Date.parse(ov.rose_at_iso) : Date.parse(alert.startedAt);
   const deploy = ((changes?.data as Row[] | undefined) ?? []).find((d) => {
-    const m = Number(d.minutes_before_onset);
-    // A change only explains a problem that starts soon after it.
-    return m >= 0 && m <= 10;
+    const gap = rose - Date.parse(String(d.at_iso));
+    return gap >= -60_000 && gap <= DEPLOY_WINDOW_MS;
   });
   const deps = find(history, "dependency_health");
-  const badDep = ((deps?.data as Row[] | undefined) ?? []).find(
-    (d) => pct(d.errors_now) > 20 || pct(d.errors_peak) > 20,
-  );
+  const depRows = (deps?.data as Row[] | undefined) ?? [];
+  const failing = (d: Row) => pct(d.errors_now) > 20 || pct(d.errors_peak) > 20;
+  const slow = (d: Row) => secs(d.p99_now) > 0.5 && secs(d.p99_now) > 3 * secs(d.p99_before);
+  const badDep = depRows.find((d) => failing(d) || slow(d));
   const traces = find(history, "slow_traces");
   const went = ((traces?.data as Row | undefined)?.time_went_to ?? null) as Row | null;
   const logs = find(history, "error_logs");
@@ -79,16 +90,26 @@ export function conclude(input: PlannerInput) {
   const ruled: string[] = [];
   const say = (h: HistoryItem | undefined, claim: string) => h && evidence.push({ claim, step: h.step });
 
-  if (changes && !deploy) ruled.push(`No deploy of ${alert.service} in the 10 minutes before onset.`);
+  if (changes && !deploy) ruled.push(`No deploy of ${alert.service} in the 5 minutes before the signal rose.`);
   if (deps && !badDep && kind !== "memory") ruled.push("Downstream dependencies look healthy.");
 
   // ---- failing dependency -------------------------------------------------------------------
-  if (kind === "errors" && badDep) {
-    say(overview, `${alert.service} 5xx error rate went from ${ov.baseline} to a peak of ${ov.peak}.`);
-    say(deps, `Calls to ${badDep.dependency} are failing: errors ${badDep.errors_before} → ${badDep.errors_now}.`);
+  if ((kind === "errors" || kind === "latency") && badDep) {
+    const what = kind === "errors" ? "5xx error rate" : "p99 latency";
+    say(overview, `${alert.service} ${what} went from ${ov.baseline} to a peak of ${ov.peak}.`);
+    if (failing(badDep))
+      say(deps, `Calls to ${badDep.dependency} are failing: errors ${badDep.errors_before} → ${badDep.errors_now}.`);
+    if (slow(badDep))
+      say(deps, `Calls to ${badDep.dependency} slowed down: p99 ${badDep.p99_before} → ${badDep.p99_now}.`);
+    if (went && String(went.span).includes(String(badDep.dependency)))
+      say(traces, `In the slowest request, ${went.share_percent}% of the time is spent in "${went.span}".`);
     if (topLog) say(logs, `Most common error: "${topLog.message}" (×${topLog.count_after_onset} since onset).`);
+    if (deploy)
+      ruled.push(
+        `Release ${deploy.version} "${deploy.description}": the slowdown follows ${badDep.dependency}, not the release.`,
+      );
     return {
-      summary: `${alert.service} is returning 5xx because ${badDep.dependency} is failing.`,
+      summary: `${alert.service} is ${kind === "errors" ? "returning 5xx" : "slow"} because ${badDep.dependency} is ${failing(badDep) ? "failing" : "slow"}.`,
       likely_cause: `${badDep.dependency} is down or degraded; ${alert.service} passes its failures on to callers.`,
       confidence: "high" as const,
       evidence,

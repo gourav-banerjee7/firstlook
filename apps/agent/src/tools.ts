@@ -228,6 +228,7 @@ const metricOverview = defineTool({
         peak: fmt(s.peak, unit),
         now: fmt(s.current, unit),
         rose_at: s.rose ? hhmm(s.rose * 1000) : null,
+        rose_at_iso: s.rose ? new Date(s.rose * 1000).toISOString() : null,
         elevated_minutes: s.elevatedMinutes,
         recovered: s.recovered,
         falling: s.falling,
@@ -446,6 +447,7 @@ const recentChanges = defineTool({
         description: clean(d.description, 100),
         author: clean(d.author, 40),
         at: hhmm(new Date(d.at)),
+        at_iso: new Date(d.at).toISOString(),
         minutes_before_onset: before,
       };
     });
