@@ -100,6 +100,21 @@ as a score.
 **Open a GitHub Issue per incident:** set `FIRSTLOOK_GITHUB_TOKEN` (fine-grained, Issues: write on one repo) and
 `FIRSTLOOK_GITHUB_REPO=owner/name`.
 
+## Progress
+
+| Phase                             |                                                                                |                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| 0 · Foundations                   | monorepo, CI, repo hygiene                                                     | ✅                                                  |
+| 1 · An observable system to break | demo services, OTel pipeline, Grafana as code, four faults                     | ✅                                                  |
+| 2 · The investigator              | ingest, queue, tools, budgets, evidence-or-drop, injection hardening, Langfuse | ✅                                                  |
+| 3 · Incident Room and outputs     | live + recorded room, break-it, feedback, annotations, GitHub Issues           | ✅ (follow-up questions and ntfy/Slack still to do) |
+| 4 · Evals                         | recorded incidents as test cases, graders, model comparisons in CI             | next                                                |
+| 5 · Kubernetes                    | Helm chart, k3s, GHCR images                                                   |                                                     |
+| 6 · Live demo                     | hosted, always-on demo                                                         |                                                     |
+| 7 · Stretch                       | see the [plan](docs/PLAN.md)                                                   |                                                     |
+
+Each phase is one PR, stacked on the previous one.
+
 ## Layout
 
 ```
