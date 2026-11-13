@@ -1,0 +1,150 @@
+[
+  {
+    "planner": "playbook",
+    "case": "bad-deploy",
+    "run": 1,
+    "pass": true,
+    "grades": [
+      {
+        "grader": "cause",
+        "pass": true,
+        "detail": "Release 1.4.1 (\"Search bookings by notes (#482)\") made \"SELECT bookings.search\" slow."
+      },
+      {
+        "grader": "noise",
+        "pass": true,
+        "detail": "noise=false, expected false"
+      },
+      {
+        "grader": "links",
+        "pass": true,
+        "detail": "4 links, each reproducing its step"
+      },
+      {
+        "grader": "numbers",
+        "pass": true,
+        "detail": "every number traced to its step"
+      },
+      {
+        "grader": "budget",
+        "pass": true,
+        "detail": "5/8 tool calls"
+      }
+    ],
+    "summary": "demo-api slowed down right after release 1.4.1.",
+    "toolCalls": 5,
+    "tokens": 0,
+    "ms": 6
+  },
+  {
+    "planner": "playbook",
+    "case": "dependency-outage",
+    "run": 1,
+    "pass": true,
+    "grades": [
+      {
+        "grader": "cause",
+        "pass": true,
+        "detail": "payments-stub is down or degraded; demo-api passes its failures on to callers."
+      },
+      {
+        "grader": "noise",
+        "pass": true,
+        "detail": "noise=false, expected false"
+      },
+      {
+        "grader": "links",
+        "pass": true,
+        "detail": "4 links, each reproducing its step"
+      },
+      {
+        "grader": "numbers",
+        "pass": true,
+        "detail": "every number traced to its step"
+      },
+      {
+        "grader": "budget",
+        "pass": true,
+        "detail": "5/8 tool calls"
+      }
+    ],
+    "summary": "demo-api is slow because payments-stub is failing.",
+    "toolCalls": 5,
+    "tokens": 0,
+    "ms": 1
+  },
+  {
+    "planner": "playbook",
+    "case": "memory-leak",
+    "run": 1,
+    "pass": true,
+    "grades": [
+      {
+        "grader": "cause",
+        "pass": true,
+        "detail": "A memory leak introduced in 1.4.2 (\"Cache worker profiles in memory (#490)\")."
+      },
+      {
+        "grader": "noise",
+        "pass": true,
+        "detail": "noise=false, expected false"
+      },
+      {
+        "grader": "links",
+        "pass": true,
+        "detail": "2 links, each reproducing its step"
+      },
+      {
+        "grader": "numbers",
+        "pass": true,
+        "detail": "every number traced to its step"
+      },
+      {
+        "grader": "budget",
+        "pass": true,
+        "detail": "3/8 tool calls"
+      }
+    ],
+    "summary": "demo-api memory is climbing steadily since release 1.4.2; it will hit its limit and restart.",
+    "toolCalls": 3,
+    "tokens": 0,
+    "ms": 3
+  },
+  {
+    "planner": "playbook",
+    "case": "noisy-blip",
+    "run": 1,
+    "pass": true,
+    "grades": [
+      {
+        "grader": "cause",
+        "pass": true,
+        "detail": "n/a (noise case)"
+      },
+      {
+        "grader": "noise",
+        "pass": true,
+        "detail": "noise=true, expected true"
+      },
+      {
+        "grader": "links",
+        "pass": true,
+        "detail": "2 links, each reproducing its step"
+      },
+      {
+        "grader": "numbers",
+        "pass": true,
+        "detail": "every number traced to its step"
+      },
+      {
+        "grader": "budget",
+        "pass": true,
+        "detail": "4/8 tool calls"
+      }
+    ],
+    "summary": "A 1.8-minute burst of errors on demo-api that is clearing up by itself.",
+    "toolCalls": 4,
+    "tokens": 0,
+    "ms": 0
+  }
+]

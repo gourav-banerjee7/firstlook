@@ -1,0 +1,43 @@
+name: Model evals
+
+# Same recorded incidents and graders as CI, but with a real model, several runs per case.
+# Manual (it costs API quota); needs the GEMINI_API_KEY repository secret.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Gemini model
+        default: gemini-3.5-flash
+      repeats:
+        description: Runs per case
+        default: "3"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Evals with ${{ inputs.model }}
+        run: pnpm --filter @firstlook/agent eval
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ inputs.model }}
+          EVAL_REPEATS: ${{ inputs.repeats }}
+          EVAL_RUN_NAME: ci-${{ inputs.model }}
+          LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-eval-results
+          path: apps/agent/evals/results.*

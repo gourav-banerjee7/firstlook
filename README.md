@@ -100,6 +100,32 @@ as a score.
 **Open a GitHub Issue per incident:** set `FIRSTLOOK_GITHUB_TOKEN` (fine-grained, Issues: write on one repo) and
 `FIRSTLOOK_GITHUB_REPO=owner/name`.
 
+## Evals
+
+Every real incident becomes a test case. A **cassette** captures the raw telemetry behind it (every metric
+query, log line, trace and deploy any tool could ask for, as of investigation time), so the whole
+investigation replays offline, with any planner, in seconds. Five graders score each note:
+
+- **cause**: names what was actually broken, and not the decoy (a recent rollback, a recovered dependency)
+- **noise**: blips are called noise; real incidents aren't
+- **links**: every evidence link opens the exact query of the step it cites
+- **numbers**: every number in a claim traces back to its step; nothing had to be dropped
+- **budget**: within the tool-call budget
+
+CI replays every recorded incident through the playbook on each PR and fails if any grade fails; a
+[mutation check](apps/agent/evals/README.md) confirms that disabling the dependency check or the noise rule
+breaks the build. Model runs (Gemini, Ollama, several repeats each) go through the same graders on demand,
+with results mirrored to a Langfuse dataset when it's configured.
+
+| Planner  | Case              | Pass | cause | noise | links | numbers | budget | Tool calls |
+| -------- | ----------------- | ---- | ----- | ----- | ----- | ------- | ------ | ---------- |
+| playbook | bad-deploy        | 1/1  | ✅    | ✅    | ✅    | ✅      | ✅     | 5.0        |
+| playbook | dependency-outage | 1/1  | ✅    | ✅    | ✅    | ✅      | ✅     | 5.0        |
+| playbook | memory-leak       | 1/1  | ✅    | ✅    | ✅    | ✅      | ✅     | 3.0        |
+| playbook | noisy-blip        | 1/1  | ✅    | ✅    | ✅    | ✅      | ✅     | 4.0        |
+
+4/4 runs passed · 4 recorded incidents · 2026-11-13
+
 ## Progress
 
 | Phase                             |                                                                                |                                                     |
@@ -108,8 +134,8 @@ as a score.
 | 1 · An observable system to break | demo services, OTel pipeline, Grafana as code, four faults                     | ✅                                                  |
 | 2 · The investigator              | ingest, queue, tools, budgets, evidence-or-drop, injection hardening, Langfuse | ✅                                                  |
 | 3 · Incident Room and outputs     | live + recorded room, break-it, feedback, annotations, GitHub Issues           | ✅ (follow-up questions and ntfy/Slack still to do) |
-| 4 · Evals                         | recorded incidents as test cases, graders, model comparisons in CI             | next                                                |
-| 5 · Kubernetes                    | Helm chart, k3s, GHCR images                                                   |                                                     |
+| 4 · Evals                         | recorded incidents as test cases, graders, model comparisons in CI             | ✅                                                  |
+| 5 · Kubernetes                    | Helm chart, k3s, GHCR images                                                   | next                                                |
 | 6 · Live demo                     | hosted, always-on demo                                                         |                                                     |
 | 7 · Stretch                       | see the [plan](docs/PLAN.md)                                                   |                                                     |
 
@@ -132,7 +158,7 @@ docs/runbooks/      the runbooks the alerts link to
 ## Stack
 
 TypeScript, Fastify, Postgres, OpenTelemetry, Prometheus, Loki, Tempo, Grafana + Terraform, Langfuse,
-Gemini / Ollama, Next.js, Docker Compose. Coming: evals in CI, Helm on k3s.
+Gemini / Ollama, Next.js, Docker Compose. Coming: Helm on k3s.
 
 ## License
 
