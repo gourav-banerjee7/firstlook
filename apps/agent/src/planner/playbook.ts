@@ -23,10 +23,10 @@ const SEQUENCES: Record<Kind, Array<{ tool: string; args: Record<string, unknown
       args: { signal: "latency_p99" },
       reason: "See when latency left its baseline and how far.",
     },
-    { tool: "recent_changes", args: {}, reason: "A deploy shortly before onset is the most common cause." },
+    { tool: "dependency_health", args: {}, reason: "A slow downstream service makes us slow too." },
+    { tool: "recent_changes", args: {}, reason: "A deploy just before latency rose is the most common cause." },
     { tool: "slow_traces", args: { min_ms: 500 }, reason: "Find where the time in slow requests goes." },
     { tool: "metric_breakdown", args: { signal: "latency_p99", by: "route" }, reason: "Is it every route or one?" },
-    { tool: "dependency_health", args: {}, reason: "Rule out a slow downstream service." },
   ],
   errors: [
     {
@@ -46,6 +46,15 @@ const SEQUENCES: Record<Kind, Array<{ tool: string; args: Record<string, unknown
 };
 
 const pct = (s: unknown) => (typeof s === "string" ? Number(s.replace("%", "")) : NaN);
+/** "98 ms" / "4.25 s" back to seconds. */
+const secs = (s: unknown) => {
+  if (typeof s !== "string") return NaN;
+  const n = Number.parseFloat(s);
+  return s.trim().endsWith("ms") ? n / 1000 : n;
+};
+
+/** A change explains a problem only if the signal rose within this long after it. */
+const DEPLOY_WINDOW_MS = 5 * 60_000;
 
 function find(history: HistoryItem[], tool: string) {
   return history.find((h) => h.tool === tool && !h.error);
@@ -59,14 +68,18 @@ export function conclude(input: PlannerInput) {
   const overview = find(history, "metric_overview");
   const ov = (overview?.data ?? {}) as Row;
   const changes = find(history, "recent_changes");
+  // Measured from when the signal actually left baseline, not from when the alert fired.
+  const rose = typeof ov.rose_at_iso === "string" ? Date.parse(ov.rose_at_iso) : Date.parse(alert.startedAt);
   const deploy = ((changes?.data as Row[] | undefined) ?? []).find((d) => {
-    const m = Number(d.minutes_before_onset);
-    return m >= 0 && m <= 30;
+    const gap = rose - Date.parse(String(d.at_iso));
+    return gap >= -60_000 && gap <= DEPLOY_WINDOW_MS;
   });
   const deps = find(history, "dependency_health");
-  const badDep = ((deps?.data as Row[] | undefined) ?? []).find(
-    (d) => pct(d.errors_now) > 20 || pct(d.errors_peak) > 20,
-  );
+  const depRows = (deps?.data as Row[] | undefined) ?? [];
+  // Judged on now, not the window peak: an earlier incident can leave a peak behind.
+  const failing = (d: Row) => pct(d.errors_now) > 20;
+  const slow = (d: Row) => secs(d.p99_now) > 0.5 && secs(d.p99_now) > 3 * secs(d.p99_before);
+  const badDep = depRows.find((d) => failing(d) || slow(d));
   const traces = find(history, "slow_traces");
   const went = ((traces?.data as Row | undefined)?.time_went_to ?? null) as Row | null;
   const logs = find(history, "error_logs");
@@ -78,16 +91,26 @@ export function conclude(input: PlannerInput) {
   const ruled: string[] = [];
   const say = (h: HistoryItem | undefined, claim: string) => h && evidence.push({ claim, step: h.step });
 
-  if (changes && !deploy) ruled.push(`No deploy of ${alert.service} in the 30 minutes before onset.`);
+  if (changes && !deploy) ruled.push(`No deploy of ${alert.service} in the 5 minutes before the signal rose.`);
   if (deps && !badDep && kind !== "memory") ruled.push("Downstream dependencies look healthy.");
 
   // ---- failing dependency -------------------------------------------------------------------
-  if (kind === "errors" && badDep) {
-    say(overview, `${alert.service} 5xx error rate went from ${ov.baseline} to a peak of ${ov.peak}.`);
-    say(deps, `Calls to ${badDep.dependency} are failing: errors ${badDep.errors_before} → ${badDep.errors_now}.`);
+  if ((kind === "errors" || kind === "latency") && badDep) {
+    const what = kind === "errors" ? "5xx error rate" : "p99 latency";
+    say(overview, `${alert.service} ${what} went from ${ov.baseline} to a peak of ${ov.peak}.`);
+    if (failing(badDep))
+      say(deps, `Calls to ${badDep.dependency} are failing: errors ${badDep.errors_before} → ${badDep.errors_now}.`);
+    if (slow(badDep))
+      say(deps, `Calls to ${badDep.dependency} slowed down: p99 ${badDep.p99_before} → ${badDep.p99_now}.`);
+    if (went && String(went.span).includes(String(badDep.dependency)))
+      say(traces, `In the slowest request, ${went.share_percent}% of the time is spent in "${went.span}".`);
     if (topLog) say(logs, `Most common error: "${topLog.message}" (×${topLog.count_after_onset} since onset).`);
+    if (deploy)
+      ruled.push(
+        `Release ${deploy.version} "${deploy.description}": the slowdown follows ${badDep.dependency}, not the release.`,
+      );
     return {
-      summary: `${alert.service} is returning 5xx because ${badDep.dependency} is failing.`,
+      summary: `${alert.service} is ${kind === "errors" ? "returning 5xx" : "slow"} because ${badDep.dependency} is ${failing(badDep) ? "failing" : "slow"}.`,
       likely_cause: `${badDep.dependency} is down or degraded; ${alert.service} passes its failures on to callers.`,
       confidence: "high" as const,
       evidence,
@@ -97,18 +120,30 @@ export function conclude(input: PlannerInput) {
     };
   }
 
-  // ---- short burst that recovered on its own --------------------------------------------------
-  if (kind === "errors" && ov.recovered === true && Number(ov.elevated_minutes) <= 3 && !deploy && !badDep) {
+  // ---- short burst that is recovering on its own --------------------------------------------------
+  if (
+    kind === "errors" &&
+    (ov.recovered === true || ov.falling === true) &&
+    Number(ov.elevated_minutes) <= 3 &&
+    !badDep
+  ) {
+    // The shape decides this one: a bad release causes a sustained change, not a burst that clears
+    // by itself. So a recent deploy is ruled out with that reason rather than blamed.
+    if (deploy) {
+      ruled.push(
+        `Release ${deploy.version} "${deploy.description}" (${deploy.minutes_before_onset} min before onset): a bad release causes a sustained change, not a burst that clears on its own.`,
+      );
+    }
     say(
       overview,
-      `5xx error rate peaked at ${ov.peak}, was elevated for ${ov.elevated_minutes} min and has recovered (now ${ov.now}).`,
+      `5xx error rate peaked at ${ov.peak}, was elevated for ${ov.elevated_minutes} min and ${ov.recovered ? "has recovered" : "is already falling"} (now ${ov.now}).`,
     );
     if (topLog) say(logs, `The errors were "${topLog.message}" (×${topLog.count_after_onset}).`);
     return {
-      summary: `A ${ov.elevated_minutes}-minute burst of errors on ${alert.service} that recovered by itself.`,
+      summary: `A ${ov.elevated_minutes}-minute burst of errors on ${alert.service} that is clearing up by itself.`,
       likely_cause: topLog
-        ? `Transient "${topLog.message}" errors; nothing changed and no dependency is failing.`
-        : "A transient blip; nothing changed.",
+        ? `Transient "${topLog.message}" errors; no dependency is failing${deploy ? "" : " and nothing changed"}.`
+        : "A transient blip.",
       confidence: "medium" as const,
       evidence,
       ruled_out: ruled,

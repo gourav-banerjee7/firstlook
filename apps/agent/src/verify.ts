@@ -24,8 +24,11 @@ export function numbersIn(text: string): string[] {
   return text.match(NUM) ?? [];
 }
 
+/** Machine-only fields (ISO timestamps) carry lots of digits; they must not make claims easier to "back". */
+const machineOnly = (key: string, value: unknown) => (key.endsWith("_iso") ? undefined : value);
+
 function haystack(s: VerifiableStep): Set<string> {
-  return new Set(numbersIn(`${s.summary ?? ""} ${JSON.stringify(s.data ?? "")}`));
+  return new Set(numbersIn(`${s.summary ?? ""} ${JSON.stringify(s.data ?? "", machineOnly)}`));
 }
 
 const lower = (c: Confidence): Confidence => (c === "high" ? "medium" : "low");

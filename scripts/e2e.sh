@@ -9,15 +9,22 @@ API="${API_URL:-http://localhost:8081}"
 AGENT="${AGENT_URL:-http://localhost:8080}"
 TOKEN="${ADMIN_TOKEN:-dev-admin-token}"
 
-before="$(curl -fsS -m 10 "$AGENT/api/incidents?limit=1" | python3 -c 'import json,sys; d=json.load(sys.stdin)["incidents"]; print(d[0]["id"] if d else "")')"
+started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "→ starting scenario: $SCENARIO"
 curl -fsS -m 10 -X POST -H "x-admin-token: $TOKEN" "$API/admin/scenarios/$SCENARIO/start" >/dev/null
 trap 'curl -fsS -m 10 -X POST -H "x-admin-token: $TOKEN" "$API/admin/scenarios/$SCENARIO/stop" >/dev/null || true' EXIT
 
 deadline=$(( $(date +%s) + TIMEOUT ))
 while (( $(date +%s) < deadline )); do
-  id="$(curl -fsS -m 10 "$AGENT/api/incidents?limit=1" | python3 -c 'import json,sys; d=json.load(sys.stdin)["incidents"]; print(d[0]["id"] if d and d[0].get("note") else "")')"
-  if [[ -n "$id" && "$id" != "$before" ]]; then
+  # The incident whose note was written after we broke things (new, or reopened and re-investigated).
+  id="$(curl -fsS -m 10 "$AGENT/api/incidents?limit=10" | python3 -c '
+import json, sys
+started = sys.argv[1]
+for i in json.load(sys.stdin)["incidents"]:
+    if i.get("note") and i.get("triagedAt", "") >= started:
+        print(i["id"]); break
+' "$started")"
+  if [[ -n "$id" ]]; then
     echo "✓ triaged $id"
     curl -fsS -m 10 "$AGENT/api/incidents/$id" | python3 "$(dirname "$0")/show-incident.py"
     exit 0

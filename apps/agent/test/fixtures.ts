@@ -19,21 +19,40 @@ function series(now: number, f: (secondsFromOnset: number) => number, onsetS: nu
   return pts;
 }
 
-export function fixture(scenario: Scenario, opts: { injectLog?: string } = {}): Fixture {
+export interface FixtureOptions {
+  injectLog?: string;
+  /** An unrelated outage 10 to 6 minutes before this alert, and its rollback deploy. */
+  priorIncident?: boolean;
+  /** When the prior incident's rollback landed, in minutes before onset (default 16). */
+  rollbackMinutesBefore?: number;
+  /** The payments dependency failed a few minutes before this alert, then recovered. */
+  priorDependencyPeak?: boolean;
+  /** Override which alert fired (e.g. an outage that shows up as latency first). */
+  alertName?: string;
+  /** Seconds between onset and the investigation (default 180). */
+  nowOffset?: number;
+}
+
+export function fixture(scenario: Scenario, opts: FixtureOptions = {}): Fixture {
   const nowS = Math.floor(Date.now() / 1000);
-  const onsetS = nowS - 180;
+  const onsetS = nowS - (opts.nowOffset ?? 180);
   const onset = new Date(onsetS * 1000);
   const at = (secondsFromOnset: number) => new Date((onsetS + secondsFromOnset) * 1000).toISOString();
 
-  const latency = (x: number) => (scenario === "bad-deploy" && x >= -60 ? 0.95 : 0.04);
+  const latency = (x: number) =>
+    scenario === "bad-deploy" && x >= -60 ? 0.95 : scenario === "dependency-outage" && x >= -45 ? 2.6 : 0.04;
+  // A 1-minute rate smears a burst: errors fall off linearly for a minute after it ends.
+  const blip = (x: number) => (x < -30 ? 0.002 : x <= 15 ? 0.35 : Math.max(0.002, 0.35 * (1 - (x - 15) / 60)));
+  const prior = (x: number) => (opts.priorIncident && x >= -600 && x <= -360 ? 0.16 : 0.002);
   const errRate = (x: number) =>
     scenario === "dependency-outage" && x >= -45
       ? 0.17
-      : scenario === "noisy-blip" && x >= -30 && x <= 15
-        ? 0.35
-        : 0.002;
+      : scenario === "noisy-blip"
+        ? Math.max(blip(x), prior(x))
+        : prior(x);
   const memory = (x: number) => (scenario === "memory-leak" && x >= -80 ? 70e6 + (x + 80) * 1.05e6 : 70e6);
-  const depErr = (x: number) => (scenario === "dependency-outage" && x >= -45 ? 0.88 : 0);
+  const depErr = (x: number) =>
+    scenario === "dependency-outage" && x >= -45 ? 0.88 : opts.priorDependencyPeak && x >= -280 && x <= -200 ? 0.95 : 0;
   const depLat = (x: number) => (scenario === "dependency-outage" && x >= -45 ? 2.41 : 0.12);
 
   const deploys: Deploy[] = [
@@ -46,6 +65,15 @@ export function fixture(scenario: Scenario, opts: { injectLog?: string } = {}): 
       at: at(-3 * 3600),
     },
   ];
+  if (opts.priorIncident)
+    deploys.unshift({
+      service: "demo-api",
+      version: "1.4.0",
+      commit: "f3a91c2",
+      description: "Rollback to 1.4.0",
+      author: "firstlook-demo",
+      at: at(-(opts.rollbackMinutesBefore ?? 16) * 60),
+    });
   if (scenario === "bad-deploy")
     deploys.unshift({
       service: "demo-api",
@@ -53,7 +81,7 @@ export function fixture(scenario: Scenario, opts: { injectLog?: string } = {}): 
       commit: "9b1e7d0",
       description: "Search bookings by notes (#482)",
       author: "sam",
-      at: at(-420),
+      at: at(-120),
     });
   if (scenario === "memory-leak")
     deploys.unshift({
@@ -114,20 +142,25 @@ export function fixture(scenario: Scenario, opts: { injectLog?: string } = {}): 
       return [...logLines].sort((a, b) => b.at - a.at);
     },
     async traces(): Promise<TraceHit[]> {
-      if (scenario !== "bad-deploy") return [];
+      if (scenario !== "bad-deploy" && scenario !== "dependency-outage") return [];
       return Array.from({ length: 14 }, (_, i) => ({
         traceId: `t${i}`,
-        rootName: "GET /bookings",
+        rootName: scenario === "bad-deploy" ? "GET /bookings" : "POST /bookings",
         rootService: "demo-api",
         durationMs: 700 + i * 23,
         startMs: (onsetS + i * 10) * 1000,
       }));
     },
     async traceSpans(): Promise<SpanInfo[]> {
-      return [
-        { name: "GET /bookings", service: "demo-api", durationMs: 1000, parent: true },
-        { name: "SELECT bookings.search", service: "demo-api", durationMs: 970, parent: false },
-      ];
+      return scenario === "dependency-outage"
+        ? [
+            { name: "POST /bookings", service: "demo-api", durationMs: 2500, parent: true },
+            { name: "POST payments-stub", service: "demo-api", durationMs: 2410, parent: false },
+          ]
+        : [
+            { name: "GET /bookings", service: "demo-api", durationMs: 1000, parent: true },
+            { name: "SELECT bookings.search", service: "demo-api", durationMs: 970, parent: false },
+          ];
     },
     async deploys(since) {
       return deploys.filter((d) => new Date(d.at) >= since);
@@ -135,10 +168,11 @@ export function fixture(scenario: Scenario, opts: { injectLog?: string } = {}): 
   };
 
   const alertName =
-    scenario === "bad-deploy"
+    opts.alertName ??
+    (scenario === "bad-deploy"
       ? "High P99 latency"
       : scenario === "memory-leak"
         ? "Memory near limit"
-        : "High 5xx error rate";
+        : "High 5xx error rate");
   return { sources, onset, alertName };
 }

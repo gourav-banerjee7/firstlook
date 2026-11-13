@@ -2,11 +2,13 @@
  * Firstlook agent: receives Grafana alerts, groups them into incidents, investigates each one with
  * read-only tools, and serves the results to the Incident Room.
  */
+import { SCENARIOS, type Scenario } from "@firstlook/shared";
 import { initTelemetry } from "@firstlook/telemetry";
 import Fastify, { type FastifyReply } from "fastify";
 import { config } from "./config.js";
 import { authenticate, parseAlerts } from "./ingest.js";
 import { createTracer } from "./langfuse.js";
+import { BreakItLimiter } from "./ratelimit.js";
 import { httpSources } from "./sources.js";
 import { Store } from "./store.js";
 import { startWorker } from "./worker.js";
@@ -24,9 +26,10 @@ const tel = initTelemetry({
 });
 const store = new Store(config.databaseUrl);
 const tracer = createTracer(config.langfuse);
-const investigateDelayMs = Number(process.env.INVESTIGATE_DELAY_MS ?? 45_000);
+const investigateDelayMs = Number(process.env.INVESTIGATE_DELAY_MS ?? 60_000);
 
-const app = Fastify({ logger: false, bodyLimit: 1_000_000 });
+const app = Fastify({ logger: false, bodyLimit: 1_000_000, trustProxy: process.env.TRUST_PROXY === "true" });
+const limiter = new BreakItLimiter(config.breakIt.cooldownSeconds * 1000, config.breakIt.perIpPerHour);
 
 // Keep the raw body: HMAC signatures are computed over the exact bytes Grafana sent.
 app.addContentTypeParser("application/json", { parseAs: "buffer" }, (req, body, done) => {
@@ -46,7 +49,12 @@ app.addHook("onRequest", async (req, reply) => {
   if (req.method === "OPTIONS") return reply.code(204).send();
 });
 
-app.get("/health", async () => ({ ok: true, planner: config.provider, langfuse: tracer.enabled }));
+app.get("/health", async () => ({
+  ok: true,
+  planner: config.provider,
+  langfuse: tracer.enabled,
+  breakIt: config.breakIt.enabled,
+}));
 
 // ---- ingest ----------------------------------------------------------------------------------
 
@@ -143,6 +151,40 @@ app.post<{ Params: { id: string } }>("/api/incidents/:id/reinvestigate", async (
   if (!inc) return reply.code(404).send({ error: "not found" });
   await store.enqueue("investigate", inc.id, `investigate:${inc.id}:${Date.now()}`);
   return reply.code(202).send({ queued: true });
+});
+
+app.post<{ Params: { id: string }; Body: { helpful?: unknown } }>("/api/incidents/:id/feedback", async (req, reply) => {
+  if (typeof req.body?.helpful !== "boolean") return reply.code(400).send({ error: "helpful must be a boolean" });
+  if (!(await store.saveFeedback(req.params.id, req.body.helpful)))
+    return reply.code(404).send({ error: "no triaged incident with that id" });
+  const inc = await store.incident(req.params.id);
+  const traceId = inc?.investigation?.traceId;
+  if (traceId) await tracer.score(traceId, "helpful", req.body.helpful ? 1 : 0, "Incident Room feedback");
+  tel.log("info", "feedback received", { "incident.id": req.params.id, helpful: req.body.helpful });
+  return reply.code(204).send();
+});
+
+/** "Break something": start a demo scenario, rate limited. The admin token never leaves the server. */
+app.post<{ Params: { name: string } }>("/api/scenarios/:name", async (req, reply) => {
+  if (!config.breakIt.enabled) return reply.code(403).send({ error: "Breaking things is turned off here" });
+  const name = req.params.name as Scenario;
+  if (!SCENARIOS.includes(name)) return reply.code(404).send({ error: "unknown scenario" });
+  const verdict = limiter.check(req.ip);
+  if (!verdict.ok) {
+    reply.header("retry-after", String(verdict.retryAfterSeconds));
+    return reply
+      .code(429)
+      .send({ error: `${verdict.reason}. Try again in ${Math.ceil(verdict.retryAfterSeconds / 60)} min.` });
+  }
+  const res = await fetch(new URL(`/admin/scenarios/${name}/start`, config.breakIt.demoApiUrl), {
+    method: "POST",
+    headers: { "x-admin-token": config.adminToken },
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined);
+  if (!res?.ok) return reply.code(502).send({ error: "The demo system didn't accept the fault" });
+  limiter.record(req.ip);
+  tel.log("info", "scenario started from incident room", { scenario: name });
+  return reply.code(202).send({ message: "Fault injected. Grafana should alert within about a minute." });
 });
 
 // ---- start -----------------------------------------------------------------------------------

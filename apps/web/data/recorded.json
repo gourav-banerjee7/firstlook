@@ -1,0 +1,1004 @@
+{
+  "capturedAt": "2026-11-13T11:04:02.076Z",
+  "planner": "playbook",
+  "incidents": [
+    {
+      "scenario": "noisy-blip",
+      "incident": {
+        "id": "inc_20261113_7399ff",
+        "title": "High 5xx error rate on demo-api",
+        "service": "demo-api",
+        "alertName": "High 5xx error rate",
+        "status": "resolved",
+        "startedAt": "2026-11-13T10:46:20.000Z",
+        "triagedAt": "2026-11-13T10:47:28.449Z",
+        "resolvedAt": "2026-11-13T10:47:28.345Z",
+        "note": {
+          "noise": true,
+          "author": "playbook",
+          "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/error-rate.md",
+          "summary": "A 1.8-minute burst of errors on demo-api that is clearing up by itself.",
+          "evidence": [
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20(rate(http_server_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%5C%22%7D%5B1m%5D))%20or%20vector(0))%20%2F%20sum%20(rate(http_server_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565580000%22%2C%22to%22%3A%221794566848391%22%7D%7D%7D",
+              "step": 1,
+              "claim": "5xx error rate peaked at 22.8%, was elevated for 1.8 min and is already falling (now 6.7%).",
+              "query": "(sum (rate(http_server_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum (rate(http_server_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))"
+            },
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%2C%22expr%22%3A%22%7Bservice_name%3D%5C%22demo-api%5C%22%7D%20%7C%20severity_text%3D~%5C%22ERROR%7CWARN%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566180000%22%2C%22to%22%3A%221794566848424%22%7D%7D%7D",
+              "step": 4,
+              "claim": "The errors were \"upstream connection reset\" (×152).",
+              "query": "{service_name=\"demo-api\"} | severity_text=~\"ERROR|WARN\""
+            }
+          ],
+          "nextStep": "No action needed now. If this recurs several times a day, investigate connection handling and tune the alert's duration.",
+          "ruledOut": [
+            "No deploy of demo-api in the 5 minutes before the signal rose.",
+            "Downstream dependencies look healthy."
+          ],
+          "confidence": "medium",
+          "likelyCause": "Transient \"upstream connection reset\" errors; no dependency is failing and nothing changed."
+        },
+        "severity": "critical",
+        "alerts": ["High 5xx error rate"],
+        "flapping": false,
+        "investigation": {
+          "tokens": {
+            "input": 0,
+            "output": 0
+          },
+          "wallMs": 61,
+          "planner": "playbook",
+          "toolCalls": 4
+        },
+        "summary": "More than 5% of requests to demo-api are failing.",
+        "runbookUrl": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/error-rate.md",
+        "scenario": "noisy-blip"
+      },
+      "steps": [
+        {
+          "id": "inc_20261113_7399ff:1",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:46:28.352Z",
+          "kind": "update",
+          "title": "Alert fired: High 5xx error rate",
+          "detail": "More than 5% of requests to demo-api are failing."
+        },
+        {
+          "id": "inc_20261113_7399ff:2",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.345Z",
+          "kind": "update",
+          "title": "All alerts resolved",
+          "detail": "Grafana reports the incident's alerts as resolved."
+        },
+        {
+          "id": "inc_20261113_7399ff:3",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.386Z",
+          "kind": "update",
+          "title": "Investigation started",
+          "detail": "Planner: built-in playbook (no LLM). Budget: 8 tool calls, 120 s."
+        },
+        {
+          "id": "inc_20261113_7399ff:4",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.405Z",
+          "kind": "tool",
+          "title": "Looked at error rate around onset",
+          "tool": "metric_overview",
+          "detail": "5xx error rate for demo-api: baseline 0.0%, peak 22.8%, now 6.7%. Left baseline at 10:45:50 UTC; elevated for 1.8 min, falling (now under 60% of the peak).",
+          "query": "(sum (rate(http_server_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum (rate(http_server_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20(rate(http_server_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%5C%22%7D%5B1m%5D))%20or%20vector(0))%20%2F%20sum%20(rate(http_server_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565580000%22%2C%22to%22%3A%221794566848391%22%7D%7D%7D",
+          "result": {
+            "data": {
+              "now": "6.7%",
+              "peak": "22.8%",
+              "signal": "error_rate",
+              "falling": true,
+              "rose_at": "10:45:50 UTC",
+              "baseline": "0.0%",
+              "recovered": false,
+              "rose_at_iso": "2026-11-13T10:45:50.000Z",
+              "elevated_minutes": 1.8
+            },
+            "step": 1,
+            "reason": "See the shape: sustained, or a short burst that recovered?"
+          }
+        },
+        {
+          "id": "inc_20261113_7399ff:5",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.417Z",
+          "kind": "tool",
+          "title": "Checked downstream dependencies",
+          "tool": "dependency_health",
+          "detail": "Downstream calls from demo-api: payments-stub errors 0.0% → 0.0% (peak 0.0%), p99 98 ms → 98 ms.",
+          "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565880000%22%2C%22to%22%3A%221794566848408%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "p99_now": "98 ms",
+                "dependency": "payments-stub",
+                "errors_now": "0.0%",
+                "p99_before": "98 ms",
+                "errors_peak": "0.0%",
+                "errors_before": "0.0%"
+              }
+            ],
+            "step": 2,
+            "reason": "Failing downstream calls often surface as our 5xx."
+          }
+        },
+        {
+          "id": "inc_20261113_7399ff:6",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.424Z",
+          "kind": "tool",
+          "title": "Checked recent deploys",
+          "tool": "recent_changes",
+          "detail": "No deploys of demo-api in the 60 min before onset.",
+          "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:46:20.000Z'",
+          "url": "http://localhost:3000/d/demo-api?from=1794563180000&to=1794566848418",
+          "result": {
+            "data": [],
+            "step": 3,
+            "reason": "Check for a deploy just before onset."
+          }
+        },
+        {
+          "id": "inc_20261113_7399ff:7",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.446Z",
+          "kind": "tool",
+          "title": "Read warning and error logs",
+          "tool": "error_logs",
+          "detail": "152 warning/error logs from demo-api since 10:36:20 UTC. \"upstream connection reset\" (error) ×152 after onset vs ×0 before, first seen 10:45:39 UTC.",
+          "query": "{service_name=\"demo-api\"} | severity_text=~\"ERROR|WARN\"",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%2C%22expr%22%3A%22%7Bservice_name%3D%5C%22demo-api%5C%22%7D%20%7C%20severity_text%3D~%5C%22ERROR%7CWARN%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566180000%22%2C%22to%22%3A%221794566848424%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "level": "error",
+                "message": "upstream connection reset",
+                "versions": ["1.4.0"],
+                "first_seen": "10:45:39 UTC",
+                "count_after_onset": 152,
+                "sample_attributes": {
+                  "error_type": "ECONNRESET",
+                  "http_route": "/bookings"
+                },
+                "count_before_onset": 0
+              }
+            ],
+            "step": 4,
+            "reason": "Read what the failing requests actually said."
+          }
+        },
+        {
+          "id": "inc_20261113_7399ff:8",
+          "incidentId": "inc_20261113_7399ff",
+          "at": "2026-11-13T10:47:28.448Z",
+          "kind": "note",
+          "title": "Judged as noise",
+          "detail": "A 1.8-minute burst of errors on demo-api that is clearing up by itself.",
+          "result": {
+            "noise": true,
+            "author": "playbook",
+            "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/error-rate.md",
+            "summary": "A 1.8-minute burst of errors on demo-api that is clearing up by itself.",
+            "evidence": [
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20(rate(http_server_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%5C%22%7D%5B1m%5D))%20or%20vector(0))%20%2F%20sum%20(rate(http_server_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565580000%22%2C%22to%22%3A%221794566848391%22%7D%7D%7D",
+                "step": 1,
+                "claim": "5xx error rate peaked at 22.8%, was elevated for 1.8 min and is already falling (now 6.7%).",
+                "query": "(sum (rate(http_server_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum (rate(http_server_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))"
+              },
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%2C%22expr%22%3A%22%7Bservice_name%3D%5C%22demo-api%5C%22%7D%20%7C%20severity_text%3D~%5C%22ERROR%7CWARN%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566180000%22%2C%22to%22%3A%221794566848424%22%7D%7D%7D",
+                "step": 4,
+                "claim": "The errors were \"upstream connection reset\" (×152).",
+                "query": "{service_name=\"demo-api\"} | severity_text=~\"ERROR|WARN\""
+              }
+            ],
+            "nextStep": "No action needed now. If this recurs several times a day, investigate connection handling and tune the alert's duration.",
+            "ruledOut": [
+              "No deploy of demo-api in the 5 minutes before the signal rose.",
+              "Downstream dependencies look healthy."
+            ],
+            "confidence": "medium",
+            "likelyCause": "Transient \"upstream connection reset\" errors; no dependency is failing and nothing changed."
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "bad-deploy",
+      "incident": {
+        "id": "inc_20261113_2d523f",
+        "title": "High P99 latency on demo-api",
+        "service": "demo-api",
+        "alertName": "High P99 latency",
+        "status": "resolved",
+        "startedAt": "2026-11-13T10:51:30.000Z",
+        "triagedAt": "2026-11-13T10:52:35.863Z",
+        "resolvedAt": "2026-11-13T10:54:05.013Z",
+        "note": {
+          "noise": false,
+          "author": "playbook",
+          "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/high-latency.md",
+          "summary": "demo-api slowed down right after release 1.4.1.",
+          "evidence": [
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565890000%22%2C%22to%22%3A%221794567155808%22%7D%7D%7D",
+              "step": 1,
+              "claim": "p99 latency went from 92 ms to 1.44 s, leaving baseline at 10:51:00 UTC.",
+              "query": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+            },
+            {
+              "url": "http://localhost:3000/d/demo-api?from=1794563490000&to=1794567155820",
+              "step": 3,
+              "claim": "Release 1.4.1 \"Search bookings by notes (#482)\" shipped 1 min before onset.",
+              "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:51:30.000Z'"
+            },
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7Bresource.service.name%3D%5C%22demo-api%5C%22%20%26%26%20kind%3Dserver%20%26%26%20duration%20%3E%20500ms%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566910000%22%2C%22to%22%3A%221794567155823%22%7D%7D%7D",
+              "step": 4,
+              "claim": "In the slowest request, 100% of the time is spent in \"SELECT bookings.search\".",
+              "query": "{resource.service.name=\"demo-api\" && kind=server && duration > 500ms}"
+            },
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le%2C%20http_route)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566190000%22%2C%22to%22%3A%221794567155856%22%7D%7D%7D",
+              "step": 5,
+              "claim": "Worst route: /bookings at 1.44 s (was 91 ms).",
+              "query": "histogram_quantile(0.99, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+            }
+          ],
+          "nextStep": "Roll back demo-api to the previous version. Then look at the query plan for \"SELECT bookings.search\".",
+          "ruledOut": ["Downstream dependencies look healthy."],
+          "confidence": "high",
+          "likelyCause": "Release 1.4.1 (\"Search bookings by notes (#482)\") made \"SELECT bookings.search\" slow."
+        },
+        "severity": "critical",
+        "alerts": ["High P99 latency"],
+        "flapping": false,
+        "investigation": {
+          "tokens": {
+            "input": 0,
+            "output": 0
+          },
+          "wallMs": 55,
+          "planner": "playbook",
+          "toolCalls": 5
+        },
+        "summary": "P99 latency on demo-api is above 800 ms.",
+        "runbookUrl": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/high-latency.md",
+        "scenario": "bad-deploy"
+      },
+      "steps": [
+        {
+          "id": "inc_20261113_2d523f:1",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:51:35.012Z",
+          "kind": "update",
+          "title": "Alert fired: High P99 latency",
+          "detail": "P99 latency on demo-api is above 800 ms."
+        },
+        {
+          "id": "inc_20261113_2d523f:2",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.807Z",
+          "kind": "update",
+          "title": "Investigation started",
+          "detail": "Planner: built-in playbook (no LLM). Budget: 8 tool calls, 120 s."
+        },
+        {
+          "id": "inc_20261113_2d523f:3",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.814Z",
+          "kind": "tool",
+          "title": "Looked at latency p99 around onset",
+          "tool": "metric_overview",
+          "detail": "p99 latency for demo-api: baseline 92 ms, peak 1.45 s, now 1.44 s (15.8x baseline). Left baseline at 10:51:00 UTC; elevated for 1.8 min, still elevated.",
+          "query": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565890000%22%2C%22to%22%3A%221794567155808%22%7D%7D%7D",
+          "result": {
+            "data": {
+              "now": "1.44 s",
+              "peak": "1.45 s",
+              "signal": "latency_p99",
+              "falling": false,
+              "rose_at": "10:51:00 UTC",
+              "baseline": "92 ms",
+              "recovered": false,
+              "rose_at_iso": "2026-11-13T10:51:00.000Z",
+              "elevated_minutes": 1.8
+            },
+            "step": 1,
+            "reason": "See when latency left its baseline and how far."
+          }
+        },
+        {
+          "id": "inc_20261113_2d523f:4",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.819Z",
+          "kind": "tool",
+          "title": "Checked downstream dependencies",
+          "tool": "dependency_health",
+          "detail": "Downstream calls from demo-api: payments-stub errors 0.0% → 0.0% (peak 0.0%), p99 98 ms → 98 ms.",
+          "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566190000%22%2C%22to%22%3A%221794567155815%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "p99_now": "98 ms",
+                "dependency": "payments-stub",
+                "errors_now": "0.0%",
+                "p99_before": "98 ms",
+                "errors_peak": "0.0%",
+                "errors_before": "0.0%"
+              }
+            ],
+            "step": 2,
+            "reason": "A slow downstream service makes us slow too."
+          }
+        },
+        {
+          "id": "inc_20261113_2d523f:5",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.823Z",
+          "kind": "tool",
+          "title": "Checked recent deploys",
+          "tool": "recent_changes",
+          "detail": "1 deploy(s) of demo-api in the 60 min before onset: 1.4.1 \"Search bookings by notes (#482)\" at 10:50:50 UTC, 1 min before onset.",
+          "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:51:30.000Z'",
+          "url": "http://localhost:3000/d/demo-api?from=1794563490000&to=1794567155820",
+          "result": {
+            "data": [
+              {
+                "at": "10:50:50 UTC",
+                "at_iso": "2026-11-13T10:50:50.575Z",
+                "author": "deploy-bot",
+                "commit": "9376992",
+                "version": "1.4.1",
+                "description": "Search bookings by notes (#482)",
+                "minutes_before_onset": 1
+              }
+            ],
+            "step": 3,
+            "reason": "A deploy just before latency rose is the most common cause."
+          }
+        },
+        {
+          "id": "inc_20261113_2d523f:6",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.855Z",
+          "kind": "tool",
+          "title": "Found the slowest requests",
+          "tool": "slow_traces",
+          "detail": "20+ demo-api requests over 500 ms since 10:48:30 UTC, mostly GET /bookings. Slowest: GET /bookings at 1.04 s. 100% of it in \"SELECT bookings.search\" (1.04 s, demo-api).",
+          "query": "{resource.service.name=\"demo-api\" && kind=server && duration > 500ms}",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7Bresource.service.name%3D%5C%22demo-api%5C%22%20%26%26%20kind%3Dserver%20%26%26%20duration%20%3E%20500ms%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566910000%22%2C%22to%22%3A%221794567155823%22%7D%7D%7D",
+          "result": {
+            "data": {
+              "count": 20,
+              "slowest": {
+                "name": "GET /bookings",
+                "duration": "1.04 s",
+                "trace_id": "466e5bff2be242f05ab5386e62094a26"
+              },
+              "by_route": {
+                "GET /bookings": 20
+              },
+              "time_went_to": {
+                "span": "SELECT bookings.search",
+                "service": "demo-api",
+                "duration": "1.04 s",
+                "share_percent": 100
+              }
+            },
+            "step": 4,
+            "reason": "Find where the time in slow requests goes."
+          }
+        },
+        {
+          "id": "inc_20261113_2d523f:7",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.862Z",
+          "kind": "tool",
+          "title": "Split latency p99 by route",
+          "tool": "metric_breakdown",
+          "detail": "p99 latency by route: /bookings 91 ms → 1.44 s; /admin/scenarios/:name/:action 5 ms → 5 ms; /deploys 5 ms → 5 ms.",
+          "query": "histogram_quantile(0.99, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le%2C%20http_route)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566190000%22%2C%22to%22%3A%221794567155856%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "now": "1.44 s",
+                "route": "/bookings",
+                "before": "91 ms"
+              },
+              {
+                "now": "5 ms",
+                "route": "/admin/scenarios/:name/:action",
+                "before": "5 ms"
+              },
+              {
+                "now": "5 ms",
+                "route": "/deploys",
+                "before": "5 ms"
+              }
+            ],
+            "step": 5,
+            "reason": "Is it every route or one?"
+          }
+        },
+        {
+          "id": "inc_20261113_2d523f:8",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:52:35.862Z",
+          "kind": "note",
+          "title": "Triage note ready",
+          "detail": "demo-api slowed down right after release 1.4.1.",
+          "result": {
+            "noise": false,
+            "author": "playbook",
+            "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/high-latency.md",
+            "summary": "demo-api slowed down right after release 1.4.1.",
+            "evidence": [
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794565890000%22%2C%22to%22%3A%221794567155808%22%7D%7D%7D",
+                "step": 1,
+                "claim": "p99 latency went from 92 ms to 1.44 s, leaving baseline at 10:51:00 UTC.",
+                "query": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+              },
+              {
+                "url": "http://localhost:3000/d/demo-api?from=1794563490000&to=1794567155820",
+                "step": 3,
+                "claim": "Release 1.4.1 \"Search bookings by notes (#482)\" shipped 1 min before onset.",
+                "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:51:30.000Z'"
+              },
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7Bresource.service.name%3D%5C%22demo-api%5C%22%20%26%26%20kind%3Dserver%20%26%26%20duration%20%3E%20500ms%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566910000%22%2C%22to%22%3A%221794567155823%22%7D%7D%7D",
+                "step": 4,
+                "claim": "In the slowest request, 100% of the time is spent in \"SELECT bookings.search\".",
+                "query": "{resource.service.name=\"demo-api\" && kind=server && duration > 500ms}"
+              },
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le%2C%20http_route)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566190000%22%2C%22to%22%3A%221794567155856%22%7D%7D%7D",
+                "step": 5,
+                "claim": "Worst route: /bookings at 1.44 s (was 91 ms).",
+                "query": "histogram_quantile(0.99, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+              }
+            ],
+            "nextStep": "Roll back demo-api to the previous version. Then look at the query plan for \"SELECT bookings.search\".",
+            "ruledOut": ["Downstream dependencies look healthy."],
+            "confidence": "high",
+            "likelyCause": "Release 1.4.1 (\"Search bookings by notes (#482)\") made \"SELECT bookings.search\" slow."
+          }
+        },
+        {
+          "id": "inc_20261113_2d523f:9",
+          "incidentId": "inc_20261113_2d523f",
+          "at": "2026-11-13T10:54:05.013Z",
+          "kind": "update",
+          "title": "All alerts resolved",
+          "detail": "Grafana reports the incident's alerts as resolved."
+        }
+      ]
+    },
+    {
+      "scenario": "memory-leak",
+      "incident": {
+        "id": "inc_20261113_afd98b",
+        "title": "Memory near limit on demo-api",
+        "service": "demo-api",
+        "alertName": "Memory near limit",
+        "status": "resolved",
+        "startedAt": "2026-11-13T10:57:20.000Z",
+        "triagedAt": "2026-11-13T10:58:27.331Z",
+        "resolvedAt": "2026-11-13T10:59:56.675Z",
+        "note": {
+          "noise": false,
+          "author": "playbook",
+          "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/memory.md",
+          "summary": "demo-api memory is climbing steadily since release 1.4.2; it will hit its limit and restart.",
+          "evidence": [
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22max%20(process_memory_usage_bytes%7Bservice_name%3D%5C%22demo-api%5C%22%7D)%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566240000%22%2C%22to%22%3A%221794567507275%22%7D%7D%7D",
+              "step": 1,
+              "claim": "Process memory rose from 99 MB to 230 MB, rising at about 51 MB/min.",
+              "query": "max (process_memory_usage_bytes{service_name=\"demo-api\"})"
+            },
+            {
+              "url": "http://localhost:3000/d/demo-api?from=1794563840000&to=1794567507278",
+              "step": 2,
+              "claim": "Release 1.4.2 \"Cache worker profiles in memory (#490)\" shipped 1 min before onset.",
+              "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:57:20.000Z'"
+            }
+          ],
+          "nextStep": "Roll back demo-api from 1.4.2 before the process is OOM-killed, then take a heap snapshot of the new code path.",
+          "ruledOut": [],
+          "confidence": "high",
+          "likelyCause": "A memory leak introduced in 1.4.2 (\"Cache worker profiles in memory (#490)\")."
+        },
+        "severity": "warning",
+        "alerts": ["Memory near limit"],
+        "flapping": false,
+        "investigation": {
+          "tokens": {
+            "input": 0,
+            "output": 0
+          },
+          "wallMs": 56,
+          "planner": "playbook",
+          "toolCalls": 3
+        },
+        "summary": "demo-api memory is above 150 MB and climbing toward its limit.",
+        "runbookUrl": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/memory.md",
+        "scenario": "memory-leak"
+      },
+      "steps": [
+        {
+          "id": "inc_20261113_afd98b:1",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:57:26.672Z",
+          "kind": "update",
+          "title": "Alert fired: Memory near limit",
+          "detail": "demo-api memory is above 150 MB and climbing toward its limit."
+        },
+        {
+          "id": "inc_20261113_afd98b:2",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:58:27.275Z",
+          "kind": "update",
+          "title": "Investigation started",
+          "detail": "Planner: built-in playbook (no LLM). Budget: 8 tool calls, 120 s."
+        },
+        {
+          "id": "inc_20261113_afd98b:3",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:58:27.277Z",
+          "kind": "tool",
+          "title": "Looked at memory around onset",
+          "tool": "metric_overview",
+          "detail": "process memory for demo-api: baseline 99 MB, peak 235 MB, now 230 MB (2.3x baseline). Left baseline at 10:57:05 UTC; elevated for 1.5 min, still elevated. Rising steadily at about 51 MB/min.",
+          "query": "max (process_memory_usage_bytes{service_name=\"demo-api\"})",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22max%20(process_memory_usage_bytes%7Bservice_name%3D%5C%22demo-api%5C%22%7D)%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566240000%22%2C%22to%22%3A%221794567507275%22%7D%7D%7D",
+          "result": {
+            "data": {
+              "now": "230 MB",
+              "peak": "235 MB",
+              "signal": "memory",
+              "falling": false,
+              "rose_at": "10:57:05 UTC",
+              "baseline": "99 MB",
+              "recovered": false,
+              "rose_at_iso": "2026-11-13T10:57:05.000Z",
+              "slope_per_min": "51 MB",
+              "elevated_minutes": 1.5
+            },
+            "step": 1,
+            "reason": "Is memory still climbing, or did it plateau?"
+          }
+        },
+        {
+          "id": "inc_20261113_afd98b:4",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:58:27.280Z",
+          "kind": "tool",
+          "title": "Checked recent deploys",
+          "tool": "recent_changes",
+          "detail": "3 deploy(s) of demo-api in the 60 min before onset: 1.4.2 \"Cache worker profiles in memory (#490)\" at 10:55:57 UTC, 1 min before onset; 1.4.0 \"Rollback to 1.4.0\" at 10:52:37 UTC, 5 min before onset; 1.4.1 \"Search bookings by notes (#482)\" at 10:50:50 UTC, 6 min before onset.",
+          "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:57:20.000Z'",
+          "url": "http://localhost:3000/d/demo-api?from=1794563840000&to=1794567507278",
+          "result": {
+            "data": [
+              {
+                "at": "10:55:57 UTC",
+                "at_iso": "2026-11-13T10:55:57.359Z",
+                "author": "deploy-bot",
+                "commit": "e4f6889",
+                "version": "1.4.2",
+                "description": "Cache worker profiles in memory (#490)",
+                "minutes_before_onset": 1
+              },
+              {
+                "at": "10:52:37 UTC",
+                "at_iso": "2026-11-13T10:52:37.235Z",
+                "author": "deploy-bot",
+                "commit": "d66c161",
+                "version": "1.4.0",
+                "description": "Rollback to 1.4.0",
+                "minutes_before_onset": 5
+              },
+              {
+                "at": "10:50:50 UTC",
+                "at_iso": "2026-11-13T10:50:50.575Z",
+                "author": "deploy-bot",
+                "commit": "9376992",
+                "version": "1.4.1",
+                "description": "Search bookings by notes (#482)",
+                "minutes_before_onset": 6
+              }
+            ],
+            "step": 2,
+            "reason": "A steady climb that starts at a deploy points at that release."
+          }
+        },
+        {
+          "id": "inc_20261113_afd98b:5",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:58:27.329Z",
+          "kind": "tool",
+          "title": "Read warning and error logs",
+          "tool": "error_logs",
+          "detail": "950 warning/error logs from demo-api since 10:47:20 UTC. \"slow query\" (warn) ×0 after onset vs ×950 before, first seen 10:50:51 UTC.",
+          "query": "{service_name=\"demo-api\"} | severity_text=~\"ERROR|WARN\"",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%2C%22expr%22%3A%22%7Bservice_name%3D%5C%22demo-api%5C%22%7D%20%7C%20severity_text%3D~%5C%22ERROR%7CWARN%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566840000%22%2C%22to%22%3A%221794567507280%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "level": "warn",
+                "message": "slow query",
+                "versions": ["1.4.0"],
+                "first_seen": "10:50:51 UTC",
+                "count_after_onset": 0,
+                "sample_attributes": {
+                  "db_duration_ms": "513",
+                  "db_operation_name": "SELECT bookings.search"
+                },
+                "count_before_onset": 950
+              }
+            ],
+            "step": 3,
+            "reason": "Look for GC or allocation warnings."
+          }
+        },
+        {
+          "id": "inc_20261113_afd98b:6",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:58:27.331Z",
+          "kind": "note",
+          "title": "Triage note ready",
+          "detail": "demo-api memory is climbing steadily since release 1.4.2; it will hit its limit and restart.",
+          "result": {
+            "noise": false,
+            "author": "playbook",
+            "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/memory.md",
+            "summary": "demo-api memory is climbing steadily since release 1.4.2; it will hit its limit and restart.",
+            "evidence": [
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22max%20(process_memory_usage_bytes%7Bservice_name%3D%5C%22demo-api%5C%22%7D)%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566240000%22%2C%22to%22%3A%221794567507275%22%7D%7D%7D",
+                "step": 1,
+                "claim": "Process memory rose from 99 MB to 230 MB, rising at about 51 MB/min.",
+                "query": "max (process_memory_usage_bytes{service_name=\"demo-api\"})"
+              },
+              {
+                "url": "http://localhost:3000/d/demo-api?from=1794563840000&to=1794567507278",
+                "step": 2,
+                "claim": "Release 1.4.2 \"Cache worker profiles in memory (#490)\" shipped 1 min before onset.",
+                "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T09:57:20.000Z'"
+              }
+            ],
+            "nextStep": "Roll back demo-api from 1.4.2 before the process is OOM-killed, then take a heap snapshot of the new code path.",
+            "ruledOut": [],
+            "confidence": "high",
+            "likelyCause": "A memory leak introduced in 1.4.2 (\"Cache worker profiles in memory (#490)\")."
+          }
+        },
+        {
+          "id": "inc_20261113_afd98b:7",
+          "incidentId": "inc_20261113_afd98b",
+          "at": "2026-11-13T10:59:56.675Z",
+          "kind": "update",
+          "title": "All alerts resolved",
+          "detail": "Grafana reports the incident's alerts as resolved."
+        }
+      ]
+    },
+    {
+      "scenario": "dependency-outage",
+      "incident": {
+        "id": "inc_20261113_226431",
+        "title": "High P99 latency on demo-api",
+        "service": "demo-api",
+        "alertName": "High P99 latency",
+        "status": "triaged",
+        "startedAt": "2026-11-13T11:02:40.000Z",
+        "triagedAt": "2026-11-13T11:03:45.761Z",
+        "note": {
+          "noise": false,
+          "author": "playbook",
+          "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/high-latency.md",
+          "summary": "demo-api is slow because payments-stub is failing.",
+          "evidence": [
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566560000%22%2C%22to%22%3A%221794567825691%22%7D%7D%7D",
+              "step": 1,
+              "claim": "demo-api p99 latency went from 92 ms to a peak of 2.49 s.",
+              "query": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+            },
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566860000%22%2C%22to%22%3A%221794567825699%22%7D%7D%7D",
+              "step": 2,
+              "claim": "Calls to payments-stub are failing: errors 0.0% → 90.8%.",
+              "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+            },
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566860000%22%2C%22to%22%3A%221794567825699%22%7D%7D%7D",
+              "step": 2,
+              "claim": "Calls to payments-stub slowed down: p99 98 ms → 4.21 s.",
+              "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+            },
+            {
+              "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7Bresource.service.name%3D%5C%22demo-api%5C%22%20%26%26%20kind%3Dserver%20%26%26%20duration%20%3E%20500ms%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794567580000%22%2C%22to%22%3A%221794567825707%22%7D%7D%7D",
+              "step": 4,
+              "claim": "In the slowest request, 100% of the time is spent in \"POST payments-stub\".",
+              "query": "{resource.service.name=\"demo-api\" && kind=server && duration > 500ms}"
+            }
+          ],
+          "nextStep": "Check payments-stub's status page or owners. Consider failing fast or queueing bookings until it recovers.",
+          "ruledOut": ["Release 1.4.0 \"Rollback to 1.4.0\": the slowdown follows payments-stub, not the release."],
+          "confidence": "high",
+          "likelyCause": "payments-stub is down or degraded; demo-api passes its failures on to callers."
+        },
+        "severity": "critical",
+        "alerts": ["High 5xx error rate", "High P99 latency"],
+        "flapping": false,
+        "investigation": {
+          "tokens": {
+            "input": 0,
+            "output": 0
+          },
+          "wallMs": 70,
+          "planner": "playbook",
+          "toolCalls": 5
+        },
+        "summary": "P99 latency on demo-api is above 800 ms.",
+        "runbookUrl": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/high-latency.md",
+        "scenario": "dependency-outage"
+      },
+      "steps": [
+        {
+          "id": "inc_20261113_226431:1",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:02:45.007Z",
+          "kind": "update",
+          "title": "Alert fired: High P99 latency",
+          "detail": "P99 latency on demo-api is above 800 ms."
+        },
+        {
+          "id": "inc_20261113_226431:2",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:02:48.340Z",
+          "kind": "update",
+          "title": "Related alert joined: High 5xx error rate",
+          "detail": "More than 5% of requests to demo-api are failing."
+        },
+        {
+          "id": "inc_20261113_226431:3",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.690Z",
+          "kind": "update",
+          "title": "Investigation started",
+          "detail": "Planner: built-in playbook (no LLM). Budget: 8 tool calls, 120 s."
+        },
+        {
+          "id": "inc_20261113_226431:4",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.698Z",
+          "kind": "tool",
+          "title": "Looked at latency p99 around onset",
+          "tool": "metric_overview",
+          "detail": "p99 latency for demo-api: baseline 92 ms, peak 2.49 s, now 2.48 s (26.9x baseline). Left baseline at 11:02:10 UTC; elevated for 1.8 min, still elevated.",
+          "query": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566560000%22%2C%22to%22%3A%221794567825691%22%7D%7D%7D",
+          "result": {
+            "data": {
+              "now": "2.48 s",
+              "peak": "2.49 s",
+              "signal": "latency_p99",
+              "falling": false,
+              "rose_at": "11:02:10 UTC",
+              "baseline": "92 ms",
+              "recovered": false,
+              "rose_at_iso": "2026-11-13T11:02:10.000Z",
+              "elevated_minutes": 1.8
+            },
+            "step": 1,
+            "reason": "See when latency left its baseline and how far."
+          }
+        },
+        {
+          "id": "inc_20261113_226431:5",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.703Z",
+          "kind": "tool",
+          "title": "Checked downstream dependencies",
+          "tool": "dependency_health",
+          "detail": "Downstream calls from demo-api: payments-stub errors 0.0% → 90.8% (peak 91.2%), p99 98 ms → 4.21 s.",
+          "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566860000%22%2C%22to%22%3A%221794567825699%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "p99_now": "4.21 s",
+                "dependency": "payments-stub",
+                "errors_now": "90.8%",
+                "p99_before": "98 ms",
+                "errors_peak": "91.2%",
+                "errors_before": "0.0%"
+              }
+            ],
+            "step": 2,
+            "reason": "A slow downstream service makes us slow too."
+          }
+        },
+        {
+          "id": "inc_20261113_226431:6",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.707Z",
+          "kind": "tool",
+          "title": "Checked recent deploys",
+          "tool": "recent_changes",
+          "detail": "4 deploy(s) of demo-api in the 60 min before onset: 1.4.0 \"Rollback to 1.4.0\" at 10:58:29 UTC, 4 min before onset; 1.4.2 \"Cache worker profiles in memory (#490)\" at 10:55:57 UTC, 7 min before onset; 1.4.0 \"Rollback to 1.4.0\" at 10:52:37 UTC, 10 min before onset; 1.4.1 \"Search bookings by notes (#482)\" at 10:50:50 UTC, 12 min before onset.",
+          "query": "SELECT version, commit, description, at FROM deploys WHERE service = 'demo-api' AND at >= '2026-11-13T10:02:40.000Z'",
+          "url": "http://localhost:3000/d/demo-api?from=1794564160000&to=1794567825705",
+          "result": {
+            "data": [
+              {
+                "at": "10:58:29 UTC",
+                "at_iso": "2026-11-13T10:58:29.721Z",
+                "author": "deploy-bot",
+                "commit": "6c0ac4a",
+                "version": "1.4.0",
+                "description": "Rollback to 1.4.0",
+                "minutes_before_onset": 4
+              },
+              {
+                "at": "10:55:57 UTC",
+                "at_iso": "2026-11-13T10:55:57.359Z",
+                "author": "deploy-bot",
+                "commit": "e4f6889",
+                "version": "1.4.2",
+                "description": "Cache worker profiles in memory (#490)",
+                "minutes_before_onset": 7
+              },
+              {
+                "at": "10:52:37 UTC",
+                "at_iso": "2026-11-13T10:52:37.235Z",
+                "author": "deploy-bot",
+                "commit": "d66c161",
+                "version": "1.4.0",
+                "description": "Rollback to 1.4.0",
+                "minutes_before_onset": 10
+              },
+              {
+                "at": "10:50:50 UTC",
+                "at_iso": "2026-11-13T10:50:50.575Z",
+                "author": "deploy-bot",
+                "commit": "9376992",
+                "version": "1.4.1",
+                "description": "Search bookings by notes (#482)",
+                "minutes_before_onset": 12
+              }
+            ],
+            "step": 3,
+            "reason": "A deploy just before latency rose is the most common cause."
+          }
+        },
+        {
+          "id": "inc_20261113_226431:7",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.755Z",
+          "kind": "tool",
+          "title": "Found the slowest requests",
+          "tool": "slow_traces",
+          "detail": "20+ demo-api requests over 500 ms since 10:59:40 UTC, mostly POST /bookings. Slowest: POST /bookings at 2.38 s. 100% of it in \"POST payments-stub\" (2.39 s, demo-api).",
+          "query": "{resource.service.name=\"demo-api\" && kind=server && duration > 500ms}",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7Bresource.service.name%3D%5C%22demo-api%5C%22%20%26%26%20kind%3Dserver%20%26%26%20duration%20%3E%20500ms%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794567580000%22%2C%22to%22%3A%221794567825707%22%7D%7D%7D",
+          "result": {
+            "data": {
+              "count": 20,
+              "slowest": {
+                "name": "POST /bookings",
+                "duration": "2.38 s",
+                "trace_id": "c8c463d31420b0bddea82a048cdcdc8c"
+              },
+              "by_route": {
+                "POST /bookings": 20
+              },
+              "time_went_to": {
+                "span": "POST payments-stub",
+                "service": "demo-api",
+                "duration": "2.39 s",
+                "share_percent": 100
+              }
+            },
+            "step": 4,
+            "reason": "Find where the time in slow requests goes."
+          }
+        },
+        {
+          "id": "inc_20261113_226431:8",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.760Z",
+          "kind": "tool",
+          "title": "Split latency p99 by route",
+          "tool": "metric_breakdown",
+          "detail": "p99 latency by route: /bookings 92 ms → 2.48 s; /admin/scenarios/:name/:action 5 ms → 5 ms; /deploys 5 ms → 5 ms.",
+          "query": "histogram_quantile(0.99, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))",
+          "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le%2C%20http_route)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566860000%22%2C%22to%22%3A%221794567825756%22%7D%7D%7D",
+          "result": {
+            "data": [
+              {
+                "now": "2.48 s",
+                "route": "/bookings",
+                "before": "92 ms"
+              },
+              {
+                "now": "5 ms",
+                "route": "/admin/scenarios/:name/:action",
+                "before": "5 ms"
+              },
+              {
+                "now": "5 ms",
+                "route": "/deploys",
+                "before": "5 ms"
+              }
+            ],
+            "step": 5,
+            "reason": "Is it every route or one?"
+          }
+        },
+        {
+          "id": "inc_20261113_226431:9",
+          "incidentId": "inc_20261113_226431",
+          "at": "2026-11-13T11:03:45.761Z",
+          "kind": "note",
+          "title": "Triage note ready",
+          "detail": "demo-api is slow because payments-stub is failing.",
+          "result": {
+            "noise": false,
+            "author": "playbook",
+            "runbook": "https://github.com/gourav-banerjee7/firstlook/blob/main/docs/runbooks/high-latency.md",
+            "summary": "demo-api is slow because payments-stub is failing.",
+            "evidence": [
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22histogram_quantile(0.99%2C%20sum%20by%20(le)%20(rate(http_server_request_duration_seconds_bucket%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566560000%22%2C%22to%22%3A%221794567825691%22%7D%7D%7D",
+                "step": 1,
+                "claim": "demo-api p99 latency went from 92 ms to a peak of 2.49 s.",
+                "query": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+              },
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566860000%22%2C%22to%22%3A%221794567825699%22%7D%7D%7D",
+                "step": 2,
+                "claim": "Calls to payments-stub are failing: errors 0.0% → 90.8%.",
+                "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+              },
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22prometheus%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22prometheus%22%2C%22uid%22%3A%22prometheus%22%7D%2C%22expr%22%3A%22(sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%2Chttp_response_status_code%3D~%5C%225..%7C0%5C%22%7D%5B1m%5D))%20or%200%20*%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D)))%20%2F%20sum%20by%20(server_address)%20(rate(http_client_request_duration_seconds_count%7Bservice_name%3D%5C%22demo-api%5C%22%7D%5B1m%5D))%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794566860000%22%2C%22to%22%3A%221794567825699%22%7D%7D%7D",
+                "step": 2,
+                "claim": "Calls to payments-stub slowed down: p99 98 ms → 4.21 s.",
+                "query": "(sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\",http_response_status_code=~\"5..|0\"}[1m])) or 0 * sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))) / sum by (server_address) (rate(http_client_request_duration_seconds_count{service_name=\"demo-api\"}[1m]))\n\nhistogram_quantile(0.99, sum by (le, server_address) (rate(http_client_request_duration_seconds_bucket{service_name=\"demo-api\"}[1m])))"
+              },
+              {
+                "url": "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7Bresource.service.name%3D%5C%22demo-api%5C%22%20%26%26%20kind%3Dserver%20%26%26%20duration%20%3E%20500ms%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%221794567580000%22%2C%22to%22%3A%221794567825707%22%7D%7D%7D",
+                "step": 4,
+                "claim": "In the slowest request, 100% of the time is spent in \"POST payments-stub\".",
+                "query": "{resource.service.name=\"demo-api\" && kind=server && duration > 500ms}"
+              }
+            ],
+            "nextStep": "Check payments-stub's status page or owners. Consider failing fast or queueing bookings until it recovers.",
+            "ruledOut": ["Release 1.4.0 \"Rollback to 1.4.0\": the slowdown follows payments-stub, not the release."],
+            "confidence": "high",
+            "likelyCause": "payments-stub is down or degraded; demo-api passes its failures on to callers."
+          }
+        }
+      ]
+    }
+  ]
+}

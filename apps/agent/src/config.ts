@@ -31,6 +31,24 @@ export const config = {
     maxTokens: num(env.MAX_TOKENS, 60_000),
   },
 
+  outputs: {
+    grafanaApiUrl: env.GRAFANA_API_URL ?? "",
+    grafanaAuth: env.GRAFANA_API_AUTH ?? "",
+    dashboardUid: env.GRAFANA_DASHBOARD_UID ?? "demo-api",
+    githubToken: env.GITHUB_TOKEN ?? "",
+    githubRepo: env.GITHUB_REPO ?? "",
+    roomUrl: env.INCIDENT_ROOM_URL ?? "",
+  },
+
+  /** The Incident Room's "break something" buttons, proxied to the demo system's fault injector. */
+  breakIt: {
+    enabled: (env.BREAK_IT_ENABLED ?? "true") !== "false",
+    demoApiUrl: env.DEMO_API_URL ?? "http://localhost:8081",
+    /** Minimum gap between any two scenarios, so a public demo can't be hammered. */
+    cooldownSeconds: num(env.BREAK_IT_COOLDOWN_SECONDS, 300),
+    perIpPerHour: num(env.BREAK_IT_PER_IP_PER_HOUR, 3),
+  },
+
   langfuse: {
     host: env.LANGFUSE_HOST ?? "",
     publicKey: env.LANGFUSE_PUBLIC_KEY ?? "",
